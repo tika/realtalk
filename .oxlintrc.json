@@ -4,5 +4,9 @@
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/remix/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/react/.oxlintrc.json"
-  ]
+  ],
+  "rules": {
+    "no-inline-comments": "off",
+    "sort-keys": "off"
+  }
 }
