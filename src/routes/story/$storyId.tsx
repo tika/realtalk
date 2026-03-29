@@ -1,50 +1,60 @@
 import { MoreVerticalCircle01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { formatRelative } from "date-fns";
 
-import { Button } from "#/components/ui/button";
-import type { ErrorInstance, Story } from "#/db/schema";
 import { AudioPlayback } from "#/components/audio-playback";
 import { ErrorInstanceItem } from "#/components/error-instance-item";
-
+import { Button } from "#/components/ui/button";
+import { orpc } from "#/orpc/client";
 
 export const Route = createFileRoute("/story/$storyId")({
   component: StoryDetail,
+  loader: async ({ context, params }) => {
+    await Promise.all([
+      context.queryClient.ensureQueryData(
+        orpc.story.getStory.queryOptions({ input: { id: params.storyId } })
+      ),
+      context.queryClient.ensureQueryData(
+        orpc.errorInstance.getErrorInstancesForStory.queryOptions({
+          input: { storyId: params.storyId },
+        })
+      ),
+    ]);
+  },
 });
-
-// TODO: fetch the story from the backend
 
 function StoryDetail() {
   const { storyId } = Route.useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const story: Story = {
-    id: storyId,
-    prompt: "Your favourite home",
-    transcript: "I really enjoyed xyz",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deletedAt: null,
-    audioUrl: "",
-    timestamps: {},
-  };
+  const { data: stories } = useSuspenseQuery(
+    orpc.story.getStory.queryOptions({ input: { id: storyId } })
+  );
+  const story = stories[0];
 
-  const errors: ErrorInstance[] = [
-    {
-      id: "okay",
-      storyId: storyId,
-      context: "Ananas",
-      original_text: "Ananas",
-      corrected_text: "Pineapple",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      deletedAt: null,
-      errorType: "mistake",
-      languageItemId: "123",
-      startTime: new Date(),
-      endTime: new Date(),
-    },
-  ];
+  const { data: errors } = useSuspenseQuery(
+    orpc.errorInstance.getErrorInstancesForStory.queryOptions({
+      input: { storyId },
+    })
+  );
+
+  const deleteStory = useMutation(
+    orpc.story.deleteStory.mutationOptions({
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: orpc.story.getAllStories.queryOptions({ input: {} }).queryKey,
+        });
+        await navigate({ to: "/" });
+      },
+    })
+  );
+
+  if (!story) {
+    return <p>Story not found.</p>;
+  }
 
   return (
     <div>
@@ -59,16 +69,17 @@ function StoryDetail() {
           </div>
         </div>
 
-        <Button>
+        <Button
+          onClick={() => deleteStory.mutate({ id: storyId })}
+          disabled={deleteStory.isPending}
+        >
           <HugeiconsIcon icon={MoreVerticalCircle01Icon} />
         </Button>
       </div>
 
       <AudioPlayback url={story.audioUrl} />
 
-      <h2>
-        Errors
-      </h2>
+      <h2>Errors</h2>
       <div>
         {errors.map((error) => (
           <ErrorInstanceItem key={error.id} error={error} />

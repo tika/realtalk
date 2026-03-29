@@ -14,6 +14,14 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TRANSCRIPTION_MODEL = "whisper-1";
 const ANALYSIS_MODEL = "anthropic/claude-sonnet-4.6";
 
+const getOpenAIClient = () => {
+  if (!process.env.OPENAI_KEY) {
+    return err(new Error("OPENAI_API_KEY environment variable is not set"));
+  }
+
+  return ok(new OpenAI({ apiKey: process.env.OPENAI_KEY }));
+};
+
 const getOpenRouterClient = () => {
   if (!process.env.OPENROUTER_KEY) {
     return err(new Error("OPENROUTER_KEY environment variable is not set"));
@@ -30,7 +38,7 @@ const getOpenRouterClient = () => {
 export const transcribeAudioFromUrl = async (
   audioUrl: string
 ): Promise<Result<{ text: string; words: TranscriptWord[] }>> => {
-  const clientResult = getOpenRouterClient();
+  const clientResult = getOpenAIClient();
 
   return await match(clientResult)
     .with({ success: false }, ({ error }) => err(error))

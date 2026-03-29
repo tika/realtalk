@@ -43,6 +43,8 @@ export const createStory = os
     })
   )
   .handler(async ({ input }) => {
+    console.log("[createStory] Starting with audioUrl:", input.audioUrl);
+
     const [createdStory] = await db
       .insert(story)
       .values({
@@ -50,11 +52,17 @@ export const createStory = os
         prompt: input.prompt,
       })
       .returning();
+    console.log("[createStory] Story inserted:", createdStory.id);
 
     const transcriptionResult = await transcribeAudioFromUrl(input.audioUrl);
+    console.log(
+      "[createStory] Transcription result success:",
+      transcriptionResult.success
+    );
     const transcription = match(transcriptionResult)
       .with({ success: true }, ({ data }) => data)
       .with({ success: false }, ({ error }) => {
+        console.error("[createStory] Transcription error:", error);
         throw new Error(`Story transcription failed: ${error.message}`);
       })
       .exhaustive();
@@ -71,13 +79,19 @@ export const createStory = os
       })
       .where(eq(story.id, createdStory.id))
       .returning();
+    console.log("[createStory] Story updated with transcript");
 
     const transcriptAnalysisResult = await analyzeTranscript(
       prompts.findErrors(transcription.text)
     );
+    console.log(
+      "[createStory] Analysis result success:",
+      transcriptAnalysisResult.success
+    );
     const transcriptAnalysis = match(transcriptAnalysisResult)
       .with({ success: true }, ({ data }) => data)
       .with({ success: false }, ({ error }) => {
+        console.error("[createStory] Analysis error:", error);
         throw new Error(`Story analysis failed: ${error.message}`);
       })
       .exhaustive();
@@ -98,11 +112,13 @@ export const createStory = os
           corrected_text: analysisError.corrected,
           errorType: analysisError.type,
           languageItemId: createdLanguageItem.id,
+          rating: analysisError.rating,
           original_text: analysisError.said,
           storyId: createdStory.id,
         });
       }
     });
+    console.log("[createStory] Complete");
 
     return updatedStory;
   });

@@ -12,6 +12,7 @@ export const transcriptAnalysisSchema = z.object({
     z.object({
       context: z.string(),
       corrected: z.string(),
+      rating: z.number(),
       language_item: z.object({
         native_text: z.string(),
         target_text: z.string(),

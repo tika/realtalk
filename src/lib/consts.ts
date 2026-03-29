@@ -1,2 +1,2 @@
 export const nativeLang = "english";
-export const targetLang = "russian";
+export const targetLang = "spanish";

@@ -13,6 +13,9 @@ export const prompts = {
     Once you have flagged these errors, you need to generate corrections for them, as well as "language_item"s.
     These language items are flashcards that the student can use to learn to speak ${targetLang} correctly.
 
+    You must also come up with a rating for this error from 1 (pronunctiation, minor issue) to 10 (phrasing that
+    renders the message incomprehensible). A 5 would using awkward phrasing or a small grammatical error.
+
     # Task
     Take the transcript (in the <input> tags) in ${targetLang} and mark the transcript for errors (blanks and mistakes).
 
@@ -26,6 +29,7 @@ export const prompts = {
           "said": string,
           "corrected": string,
           "context": string,
+          "rating": number,
           "language_item": {
             "type": "vocab" | "grammar_rule" | "phrase",
             "target_text": string,
@@ -66,6 +70,7 @@ export const prompts = {
       "errors": [
         {
           "type": "mistake",
+          "rating": 4,
           "original_text": "с моя подруга",
           "corrected_text": "с моей подругой",
           "context": "ездил в Санкт-Петербург с моя подруга",
@@ -78,6 +83,7 @@ export const prompts = {
         },
         {
           "type": "blank",
+          "rating": 6,
           "original_text": "museums",
           "corrected_text": "музеи",
           "context": "ходили в разные museums и",
@@ -90,6 +96,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 3,
           "original_text": "заказал рыба",
           "corrected_text": "заказал рыбу",
           "context": "я заказал рыба с рисом",
@@ -102,6 +109,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 3,
           "original_text": "более красивее",
           "corrected_text": "красивее",
           "context": "Петербург более красивее чем Москва",
@@ -114,6 +122,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 4,
           "original_text": "поехали на аэропорт",
           "corrected_text": "поехали в аэропорт",
           "context": "мы поехали на аэропорт и",
@@ -139,6 +148,7 @@ export const prompts = {
       "errors": [
         {
           "type": "blank",
+          "rating": 6,
           "original_text": "store",
           "corrected_text": "tienda",
           "context": "yo fui al store porque",
@@ -151,6 +161,7 @@ export const prompts = {
         },
         {
           "type": "blank",
+          "rating": 6,
           "original_text": "hungry",
           "corrected_text": "hambrienta",
           "context": "Mi hermana estaba muy hungry",
@@ -163,6 +174,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 3,
           "original_text": "llegué en mi casa",
           "corrected_text": "llegué a mi casa",
           "context": "Cuando yo llegué en mi casa",
@@ -175,6 +187,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 4,
           "original_text": "yo cocinaba la cena",
           "corrected_text": "cociné la cena",
           "context": "yo cocinaba la cena para mi familia",
@@ -187,6 +200,7 @@ export const prompts = {
         },
         {
           "type": "mistake",
+          "rating": 5,
           "original_text": "miramos a la televisión",
           "corrected_text": "vimos la televisión",
           "context": "nosotros miramos a la televisión juntos",

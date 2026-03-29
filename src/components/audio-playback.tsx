@@ -101,7 +101,7 @@ export const AudioPlayback = ({ url }: { url: string }) => {
       </Button>
       <BarVisualizer
         state={isPlaying ? "listening" : "thinking"}
-        barCount={30}
+        barCount={5}
         mediaStream={mediaStreamResources.stream}
       />
       <ScrubBarContainer

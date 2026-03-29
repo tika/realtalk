@@ -8,115 +8,150 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as StoryNewRouteImport } from './routes/story/new'
-import { Route as StoryStoryIdRouteImport } from './routes/story/$storyId'
-import { Route as ApiRpcSplatRouteImport } from './routes/api.rpc.$'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as ApiRpcSplatRouteImport } from "./routes/api.rpc.$";
+import { Route as ApiUploadthingRouteImport } from "./routes/api.uploadthing";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as StoryStoryIdRouteImport } from "./routes/story/$storyId";
+import { Route as StoryNewRouteImport } from "./routes/story/new";
 
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const StoryNewRoute = StoryNewRouteImport.update({
-  id: '/story/new',
-  path: '/story/new',
+  id: "/story/new",
+  path: "/story/new",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const StoryStoryIdRoute = StoryStoryIdRouteImport.update({
-  id: '/story/$storyId',
-  path: '/story/$storyId',
+  id: "/story/$storyId",
+  path: "/story/$storyId",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
+const ApiUploadthingRoute = ApiUploadthingRouteImport.update({
+  id: "/api/uploadthing",
+  path: "/api/uploadthing",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
-  id: '/api/rpc/$',
-  path: '/api/rpc/$',
+  id: "/api/rpc/$",
+  path: "/api/rpc/$",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/story/$storyId': typeof StoryStoryIdRoute
-  '/story/new': typeof StoryNewRoute
-  '/api/rpc/$': typeof ApiRpcSplatRoute
+  "/": typeof IndexRoute;
+  "/api/uploadthing": typeof ApiUploadthingRoute;
+  "/story/$storyId": typeof StoryStoryIdRoute;
+  "/story/new": typeof StoryNewRoute;
+  "/api/rpc/$": typeof ApiRpcSplatRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/story/$storyId': typeof StoryStoryIdRoute
-  '/story/new': typeof StoryNewRoute
-  '/api/rpc/$': typeof ApiRpcSplatRoute
+  "/": typeof IndexRoute;
+  "/api/uploadthing": typeof ApiUploadthingRoute;
+  "/story/$storyId": typeof StoryStoryIdRoute;
+  "/story/new": typeof StoryNewRoute;
+  "/api/rpc/$": typeof ApiRpcSplatRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/story/$storyId': typeof StoryStoryIdRoute
-  '/story/new': typeof StoryNewRoute
-  '/api/rpc/$': typeof ApiRpcSplatRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/api/uploadthing": typeof ApiUploadthingRoute;
+  "/story/$storyId": typeof StoryStoryIdRoute;
+  "/story/new": typeof StoryNewRoute;
+  "/api/rpc/$": typeof ApiRpcSplatRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
-  id: '__root__' | '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
-  fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath;
+  fullPaths:
+    | "/"
+    | "/api/uploadthing"
+    | "/story/$storyId"
+    | "/story/new"
+    | "/api/rpc/$";
+  fileRoutesByTo: FileRoutesByTo;
+  to:
+    | "/"
+    | "/api/uploadthing"
+    | "/story/$storyId"
+    | "/story/new"
+    | "/api/rpc/$";
+  id:
+    | "__root__"
+    | "/"
+    | "/api/uploadthing"
+    | "/story/$storyId"
+    | "/story/new"
+    | "/api/rpc/$";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  StoryStoryIdRoute: typeof StoryStoryIdRoute
-  StoryNewRoute: typeof StoryNewRoute
-  ApiRpcSplatRoute: typeof ApiRpcSplatRoute
+  IndexRoute: typeof IndexRoute;
+  ApiUploadthingRoute: typeof ApiUploadthingRoute;
+  StoryStoryIdRoute: typeof StoryStoryIdRoute;
+  StoryNewRoute: typeof StoryNewRoute;
+  ApiRpcSplatRoute: typeof ApiRpcSplatRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/story/new': {
-      id: '/story/new'
-      path: '/story/new'
-      fullPath: '/story/new'
-      preLoaderRoute: typeof StoryNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/story/$storyId': {
-      id: '/story/$storyId'
-      path: '/story/$storyId'
-      fullPath: '/story/$storyId'
-      preLoaderRoute: typeof StoryStoryIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/rpc/$': {
-      id: '/api/rpc/$'
-      path: '/api/rpc/$'
-      fullPath: '/api/rpc/$'
-      preLoaderRoute: typeof ApiRpcSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/story/new": {
+      id: "/story/new";
+      path: "/story/new";
+      fullPath: "/story/new";
+      preLoaderRoute: typeof StoryNewRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/story/$storyId": {
+      id: "/story/$storyId";
+      path: "/story/$storyId";
+      fullPath: "/story/$storyId";
+      preLoaderRoute: typeof StoryStoryIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/api/uploadthing": {
+      id: "/api/uploadthing";
+      path: "/api/uploadthing";
+      fullPath: "/api/uploadthing";
+      preLoaderRoute: typeof ApiUploadthingRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/api/rpc/$": {
+      id: "/api/rpc/$";
+      path: "/api/rpc/$";
+      fullPath: "/api/rpc/$";
+      preLoaderRoute: typeof ApiRpcSplatRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiUploadthingRoute: ApiUploadthingRoute,
   StoryStoryIdRoute: StoryStoryIdRoute,
   StoryNewRoute: StoryNewRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
+import type { createStart } from "@tanstack/react-start";
+
+import type { getRouter } from "./router.tsx";
+declare module "@tanstack/react-start" {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }

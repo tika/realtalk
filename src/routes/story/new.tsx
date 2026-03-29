@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useReducer } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useCallback, useReducer, useRef } from "react";
 
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
+import { useUploadThing } from "#/lib/uploadthing";
+import { orpc } from "#/orpc/client";
 
 export const Route = createFileRoute("/story/new")({
   component: NewStory,
@@ -35,11 +38,15 @@ const PromptButton = ({
 type State =
   | { stage: "prompt-selection" }
   | { stage: "recording-story"; prompt: string }
-  | { stage: "analysing"; prompt: string };
+  | { stage: "uploading"; prompt: string }
+  | { stage: "analysing"; prompt: string }
+  | { stage: "error"; prompt: string; message: string };
 
 type Action =
   | { type: "prompt-selected"; prompt: string }
   | { type: "recording-finished" }
+  | { type: "upload-complete" }
+  | { type: "failed"; message: string }
   | { type: "reset" };
 
 const reducer = (state: State, action: Action): State => {
@@ -51,8 +58,19 @@ const reducer = (state: State, action: Action): State => {
       if (state.stage !== "recording-story") {
         return state;
       }
-
+      return { stage: "uploading", prompt: state.prompt };
+    }
+    case "upload-complete": {
+      if (state.stage !== "uploading") {
+        return state;
+      }
       return { stage: "analysing", prompt: state.prompt };
+    }
+    case "failed": {
+      if (!("prompt" in state)) {
+        return state;
+      }
+      return { stage: "error", prompt: state.prompt, message: action.message };
     }
     case "reset": {
       return { stage: "prompt-selection" };
@@ -65,14 +83,62 @@ const reducer = (state: State, action: Action): State => {
 
 function NewStory() {
   const [state, dispatch] = useReducer(reducer, { stage: "prompt-selection" });
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const createStory = useMutation(
+    orpc.story.createStory.mutationOptions({
+      onSuccess: async (story) => {
+        await queryClient.invalidateQueries({
+          queryKey: orpc.story.getAllStories.queryOptions({ input: {} })
+            .queryKey,
+        });
+        await navigate({
+          to: "/story/$storyId",
+          params: { storyId: story.id },
+        });
+      },
+      onError: (error) => {
+        dispatch({ type: "failed", message: error.message });
+      },
+    })
+  );
+
+  const { startUpload } = useUploadThing("audioUploader", {
+    onClientUploadComplete: (res) => {
+      const { current } = stateRef;
+      const uploadedUrl = res[0]?.ufsUrl;
+      if (!uploadedUrl || !("prompt" in current)) {
+        return;
+      }
+      dispatch({ type: "upload-complete" });
+      createStory.mutate({ audioUrl: uploadedUrl, prompt: current.prompt });
+    },
+    onUploadError: (error) => {
+      dispatch({ type: "failed", message: error.message });
+    },
+  });
 
   const selectPrompt = useCallback((prompt: string) => {
     dispatch({ type: "prompt-selected", prompt });
   }, []);
 
-  const finishRecording = useCallback((_recording: Blob) => {
-    // TODO: chuck the audio to the backend
-    dispatch({ type: "recording-finished" });
+  const finishRecording = useCallback(
+    (recording: Blob) => {
+      dispatch({ type: "recording-finished" });
+      const file = new File([recording], "story-recording.webm", {
+        type: recording.type || "audio/webm",
+      });
+      startUpload([file]);
+    },
+    [startUpload]
+  );
+
+  const reset = useCallback(() => {
+    dispatch({ type: "reset" });
   }, []);
 
   return (
@@ -99,7 +165,17 @@ function NewStory() {
             <RecordStory onFinish={finishRecording} />
           </>
         )}
+        {state.stage === "uploading" && <h1>Uploading your recording...</h1>}
         {state.stage === "analysing" && <h1>Analysing your story...</h1>}
+        {state.stage === "error" && (
+          <>
+            <h1>Something went wrong</h1>
+            <p className="text-destructive">{state.message}</p>
+            <Button onClick={reset} type="button">
+              Try again
+            </Button>
+          </>
+        )}
       </div>
     </main>
   );

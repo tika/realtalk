@@ -1,4 +1,11 @@
-import { json, pgEnum, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import {
+  integer,
+  json,
+  pgEnum,
+  pgTable,
+  text,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { timestamps } from "./columns.helper";
 
@@ -41,6 +48,7 @@ export const errorInstance = pgTable("error_instance", {
   languageItemId: uuid("language_item_id").references(() => languageItem.id),
   original_text: text("original_text").notNull(),
   context: text("context").notNull(), // context around the error
+  rating: integer("rating").notNull().default(5),
 
   storyId: uuid("story_id")
     .notNull()
