@@ -7,8 +7,6 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
-import Footer from "../components/footer";
-import Header from "../components/header";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import TanStackQueryProvider from "../integrations/tanstack-query/root-provider";
 
@@ -27,11 +25,9 @@ const RootDocument = ({ children }: { children: React.ReactNode }) => (
       <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       <HeadContent />
     </head>
-    <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
+    <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)] mx-16 my-12">
       <TanStackQueryProvider>
-        <Header />
         {children}
-        <Footer />
         <TanStackDevtools
           config={{
             position: "bottom-right",
@@ -68,7 +64,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         name: "viewport",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Realtalk | Learn languages",
       },
     ],
   }),

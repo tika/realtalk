@@ -10,11 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as StoryNewRouteImport } from './routes/story/new'
+import { Route as StoryStoryIdRouteImport } from './routes/story/$storyId'
 import { Route as ApiRpcSplatRouteImport } from './routes/api.rpc.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoryNewRoute = StoryNewRouteImport.update({
+  id: '/story/new',
+  path: '/story/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoryStoryIdRoute = StoryStoryIdRouteImport.update({
+  id: '/story/$storyId',
+  path: '/story/$storyId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
@@ -25,27 +37,35 @@ const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/story/$storyId': typeof StoryStoryIdRoute
+  '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/story/$storyId': typeof StoryStoryIdRoute
+  '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/story/$storyId': typeof StoryStoryIdRoute
+  '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/rpc/$'
+  fullPaths: '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/rpc/$'
-  id: '__root__' | '/' | '/api/rpc/$'
+  to: '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
+  id: '__root__' | '/' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  StoryStoryIdRoute: typeof StoryStoryIdRoute
+  StoryNewRoute: typeof StoryNewRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
 }
 
@@ -56,6 +76,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/story/new': {
+      id: '/story/new'
+      path: '/story/new'
+      fullPath: '/story/new'
+      preLoaderRoute: typeof StoryNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/story/$storyId': {
+      id: '/story/$storyId'
+      path: '/story/$storyId'
+      fullPath: '/story/$storyId'
+      preLoaderRoute: typeof StoryStoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/rpc/$': {
@@ -70,6 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  StoryStoryIdRoute: StoryStoryIdRoute,
+  StoryNewRoute: StoryNewRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,
 }
 export const routeTree = rootRouteImport

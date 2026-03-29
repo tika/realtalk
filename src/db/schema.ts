@@ -29,6 +29,7 @@ export const story = pgTable("story", {
   transcript: text("transcript"),
   timestamps: json("timestamps"), // from transcription api
 });
+export type Story = typeof story.$inferSelect;
 
 export const languageItem = pgTable("language_item", {
   ...timestamps,
@@ -37,6 +38,7 @@ export const languageItem = pgTable("language_item", {
   targetText: text("target_text").notNull(),
   type: languageItemType("type").notNull(),
 });
+export type LanguageItem = typeof languageItem.$inferSelect;
 
 export const errorInstance = pgTable("error_instance", {
   ...timestamps,
@@ -54,3 +56,4 @@ export const errorInstance = pgTable("error_instance", {
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),
 });
+export type ErrorInstance = typeof errorInstance.$inferSelect;

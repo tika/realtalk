@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-export const TodoSchema = z.object({
+const dbTimestamps = {
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  deletedAt: z.date().nullable(),
+};
+
+export const storySchema = z.object({
+  ...dbTimestamps,
   id: z.number().int().min(1),
-  name: z.string(),
+  prompt: z.string(),
+  transcript: z.string().nullable(),
+  timestamps: z.any().nullable(), // TODO: make less generic
 });

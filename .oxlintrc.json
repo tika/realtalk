@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["src/components/ui/**"],
   "extends": [
     "./node_modules/ultracite/config/oxlint/core/.oxlintrc.json",
     "./node_modules/ultracite/config/oxlint/remix/.oxlintrc.json",
@@ -7,6 +8,9 @@
   ],
   "rules": {
     "no-inline-comments": "off",
-    "sort-keys": "off"
+    "sort-keys": "off",
+    "no-use-before-define": "off",
+    "func-style": "off",
+    "no-warning-comments": "off"
   }
 }
