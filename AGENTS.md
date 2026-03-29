@@ -124,3 +124,87 @@ Oxlint + Oxfmt's linter will catch most issues automatically. Focus your attenti
 ---
 
 Most formatting and common issues are automatically fixed by Oxlint + Oxfmt. Run `pnpm dlx ultracite fix` before committing to ensure compliance.
+
+# Pattern Matching (via ts-pattern)
+
+We use [ts-pattern](https://github.com/gvergnaud/ts-pattern) for pattern matching. It replaces `if/else` and `switch` chains with exhaustive, type-safe branching.
+
+## When to use ts-pattern
+
+**Use it for:** matching on `Result` types, discriminated unions, and any branching where exhaustiveness matters.
+
+**Don't use it for:** simple boolean checks or single-condition `if` statements. A plain `if` is fine when there's only one branch.
+
+## The Result type
+
+We define a `Result` type for all operations that can fail:
+
+```ts
+type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };
+```
+
+Every function that talks to an external service (database, API, AI) returns a `Result`. We never throw from these functions.
+
+## Matching on Result
+
+Always use `match` with `.exhaustive()` so the compiler forces you to handle both cases:
+
+```ts
+import { match } from "ts-pattern";
+
+const result = await transcribeAudio(audioUrl);
+
+const transcript = match(result)
+  .with({ success: true }, ({ data }) => data)
+  .with({ success: false }, ({ error }) => {
+    console.error("Transcription failed:", error);
+    throw new AppError("TRANSCRIPTION_FAILED", error.message);
+  })
+  .exhaustive();
+```
+
+## Matching on discriminated unions
+
+For types with a `type` or `status` field, use `match` instead of `switch`:
+
+```ts
+import { match } from "ts-pattern";
+
+type ErrorType = "not_found" | "unauthorized" | "rate_limited" | "unknown";
+
+const message = match(error.type)
+  .with("not_found", () => "Resource not found")
+  .with("unauthorized", () => "You don't have access")
+  .with("rate_limited", () => "Too many requests, try again later")
+  .with("unknown", () => "Something went wrong")
+  .exhaustive();
+```
+
+## Nested matching
+
+When you need to match on multiple fields at once, pass a tuple:
+
+```ts
+const action = match([story.status, result])
+  .with(["processing", { success: true }], ([_, { data }]) => {
+    return updateStory(story.id, { transcript: data, status: "ready" });
+  })
+  .with(["processing", { success: false }], ([_, { error }]) => {
+    return updateStory(story.id, { status: "failed" });
+  })
+  .with(["ready", P._], () => {
+    // already processed, skip
+  })
+  .otherwise(() => {
+    // ignore other states
+  });
+```
+
+## Rules
+
+1. **Always use `.exhaustive()`** unless you genuinely need a default fallback, in which case use `.otherwise()`.
+2. **Never use `.run()`** — it skips exhaustiveness checking.
+3. **Result types are always matched, never unwrapped with `if`.** This keeps error handling consistent across the codebase.
+4. **Import `P` for wildcards and predicates** when needed: `import { match, P } from "ts-pattern"`.

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useReducer } from "react";
 
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
@@ -32,26 +32,53 @@ const PromptButton = ({
   );
 };
 
+type State =
+  | { stage: "prompt-selection" }
+  | { stage: "recording-story"; prompt: string }
+  | { stage: "analysing"; prompt: string };
+
+type Action =
+  | { type: "prompt-selected"; prompt: string }
+  | { type: "recording-finished" }
+  | { type: "reset" };
+
+const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case "prompt-selected": {
+      return { stage: "recording-story", prompt: action.prompt };
+    }
+    case "recording-finished": {
+      if (state.stage !== "recording-story") {
+        return state;
+      }
+
+      return { stage: "analysing", prompt: state.prompt };
+    }
+    case "reset": {
+      return { stage: "prompt-selection" };
+    }
+    default: {
+      return state;
+    }
+  }
+};
+
 function NewStory() {
-  const [stage, setStage] = useState<
-    "prompt-selection" | "recording-story" | "analysing"
-  >("prompt-selection");
-  const [selectedPrompt, setSelectedPrompt] = useState<string>();
+  const [state, dispatch] = useReducer(reducer, { stage: "prompt-selection" });
 
   const selectPrompt = useCallback((prompt: string) => {
-    setSelectedPrompt(prompt);
-    setStage("recording-story");
+    dispatch({ type: "prompt-selected", prompt });
   }, []);
 
   const finishRecording = useCallback((_recording: Blob) => {
     // TODO: chuck the audio to the backend
-    setStage("analysing");
+    dispatch({ type: "recording-finished" });
   }, []);
 
   return (
     <main>
       <div>
-        {stage === "prompt-selection" && (
+        {state.stage === "prompt-selection" && (
           <>
             <h1>Select a prompt for your story</h1>
             <div>
@@ -65,14 +92,14 @@ function NewStory() {
             </div>
           </>
         )}
-        {stage === "recording-story" && (
+        {state.stage === "recording-story" && (
           <>
             <h1>Record your story</h1>
-            <h2>{selectedPrompt}</h2>
+            <h2>{state.prompt}</h2>
             <RecordStory onFinish={finishRecording} />
           </>
         )}
-        {stage === "analysing" && <h1>Analysing your story...</h1>}
+        {state.stage === "analysing" && <h1>Analysing your story...</h1>}
       </div>
     </main>
   );

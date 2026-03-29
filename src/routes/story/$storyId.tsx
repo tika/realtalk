@@ -33,6 +33,7 @@ function StoryDetail() {
     {
       id: "okay",
       storyId: storyId,
+      context: "Ananas",
       original_text: "Ananas",
       corrected_text: "Pineapple",
       createdAt: new Date(),

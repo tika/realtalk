@@ -1,6 +1,9 @@
-import { addTodo, listTodos } from "./todos";
+import * as errorInstance from "./error-instance";
+import * as languageItem from "./language-item";
+import * as story from "./story";
 
 export default {
-  addTodo,
-  listTodos,
+  errorInstance,
+  languageItem,
+  story,
 };
