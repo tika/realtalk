@@ -1,11 +1,10 @@
-import { MoreVerticalCircle01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatRelative } from "date-fns";
 
 import { AudioPlayback } from "#/components/audio-playback";
 import { ErrorInstanceItem } from "#/components/error-instance-item";
+import { StoryActions } from "#/components/story-actions";
 import { Button } from "#/components/ui/button";
 import { orpc } from "#/orpc/client";
 
@@ -27,28 +26,14 @@ export const Route = createFileRoute("/story/$storyId")({
 
 function StoryDetail() {
   const { storyId } = Route.useParams();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
-  const { data: stories } = useSuspenseQuery(
+  const { data: story } = useSuspenseQuery(
     orpc.story.getStory.queryOptions({ input: { id: storyId } })
   );
-  const story = stories[0];
 
   const { data: errors } = useSuspenseQuery(
     orpc.errorInstance.getErrorInstancesForStory.queryOptions({
       input: { storyId },
-    })
-  );
-
-  const deleteStory = useMutation(
-    orpc.story.deleteStory.mutationOptions({
-      onSuccess: async () => {
-        await queryClient.invalidateQueries({
-          queryKey: orpc.story.getAllStories.queryOptions({ input: {} }).queryKey,
-        });
-        await navigate({ to: "/" });
-      },
     })
   );
 
@@ -68,13 +53,7 @@ function StoryDetail() {
             <p>{formatRelative(story.createdAt, new Date())}</p>
           </div>
         </div>
-
-        <Button
-          onClick={() => deleteStory.mutate({ id: storyId })}
-          disabled={deleteStory.isPending}
-        >
-          <HugeiconsIcon icon={MoreVerticalCircle01Icon} />
-        </Button>
+        <StoryActions storyId={story.id} />
       </div>
 
       <AudioPlayback url={story.audioUrl} />

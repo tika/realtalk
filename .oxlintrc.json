@@ -11,6 +11,7 @@
     "sort-keys": "off",
     "no-use-before-define": "off",
     "func-style": "off",
-    "no-warning-comments": "off"
+    "no-warning-comments": "off",
+    "unicorn/filename-case": "off"
   }
 }

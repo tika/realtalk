@@ -1,9 +1,10 @@
 import { os } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as z from "zod";
 
 import { db } from "#/db";
-import { errorInstance, languageItem } from "#/db/schema";
+import { errorInstance, languageItem, story } from "#/db/schema";
+import { notDeleted } from "#/db/soft-delete";
 
 // get all language items for an error instance
 // input: error instance id
@@ -18,7 +19,15 @@ export const getLanguageItemsForErrorInstance = os
         languageItem,
         eq(errorInstance.languageItemId, languageItem.id)
       )
-      .where(eq(errorInstance.id, input.errorInstanceId));
+      .innerJoin(story, eq(errorInstance.storyId, story.id))
+      .where(
+        and(
+          eq(errorInstance.id, input.errorInstanceId),
+          notDeleted(errorInstance),
+          notDeleted(languageItem),
+          notDeleted(story)
+        )
+      );
 
     return rows.map(({ item }) => item);
   });
@@ -36,7 +45,15 @@ export const getLanguageItemsForStory = os
         languageItem,
         eq(errorInstance.languageItemId, languageItem.id)
       )
-      .where(eq(errorInstance.storyId, input.storyId));
+      .innerJoin(story, eq(errorInstance.storyId, story.id))
+      .where(
+        and(
+          eq(errorInstance.storyId, input.storyId),
+          notDeleted(errorInstance),
+          notDeleted(languageItem),
+          notDeleted(story)
+        )
+      );
 
     return rows.map(({ item }) => item);
   });
@@ -46,4 +63,7 @@ export const getLanguageItemsForStory = os
 // output: array of language items
 export const getAllLanguageItems = os
   .input(z.object({}))
-  .handler(async () => await db.select().from(languageItem));
+  .handler(
+    async () =>
+      await db.select().from(languageItem).where(notDeleted(languageItem))
+  );

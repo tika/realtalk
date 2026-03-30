@@ -1,9 +1,10 @@
 import { os } from "@orpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "#/db";
-import { errorInstance } from "#/db/schema";
+import { errorInstance, story } from "#/db/schema";
+import { notDeleted } from "#/db/soft-delete";
 
 // given an error id, return the error instance
 export const getErrorInstance = os
@@ -12,10 +13,21 @@ export const getErrorInstance = os
       id: z.uuid(),
     })
   )
-  .handler(async ({ input }) => await db
-      .select()
-      .from(errorInstance)
-      .where(eq(errorInstance.id, input.id)));
+  .handler(
+    async ({ input }) =>
+      await db
+        .select({ item: errorInstance })
+        .from(errorInstance)
+        .innerJoin(story, eq(errorInstance.storyId, story.id))
+        .where(
+          and(
+            eq(errorInstance.id, input.id),
+            notDeleted(errorInstance),
+            notDeleted(story)
+          )
+        )
+        .then((rows) => rows.map(({ item }) => item))
+  );
 
 // get all error instances for a given story id
 export const getErrorInstancesForStory = os
@@ -24,7 +36,18 @@ export const getErrorInstancesForStory = os
       storyId: z.uuid(),
     })
   )
-  .handler(async ({ input }) => await db
-      .select()
-      .from(errorInstance)
-      .where(eq(errorInstance.storyId, input.storyId)));
+  .handler(
+    async ({ input }) =>
+      await db
+        .select({ item: errorInstance })
+        .from(errorInstance)
+        .innerJoin(story, eq(errorInstance.storyId, story.id))
+        .where(
+          and(
+            eq(errorInstance.storyId, input.storyId),
+            notDeleted(errorInstance),
+            notDeleted(story)
+          )
+        )
+        .then((rows) => rows.map(({ item }) => item))
+  );
