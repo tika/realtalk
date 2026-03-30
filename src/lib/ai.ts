@@ -10,6 +10,8 @@ import { transcriptWordSchema } from "#/lib/transcript";
 import type { TranscriptWord } from "#/lib/transcript";
 import { transcriptAnalysisSchema } from "#/lib/transcript-analysis";
 
+import { sttPrompt, targetLang } from "./consts";
+
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TRANSCRIPTION_MODEL = "whisper-1";
 const ANALYSIS_MODEL = "anthropic/claude-sonnet-4.6";
@@ -54,6 +56,7 @@ export const transcribeAudioFromUrl = async (
               model: TRANSCRIPTION_MODEL,
               response_format: "verbose_json",
               timestamp_granularities: ["word"],
+              prompt: sttPrompt[targetLang],
             });
 
             return ok({
