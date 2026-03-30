@@ -12,6 +12,8 @@ export const prompts = {
 
     Once you have flagged these errors, you need to generate corrections for them, as well as "language_item"s.
     These language items are flashcards that the student can use to learn to speak ${targetLang} correctly.
+    Each language item must include a short "purpose" label describing what the learner is drilling.
+    Keep "purpose" to a few words, specific, and instructionally useful.
 
     You must also come up with a rating for this error from 1 (pronunctiation, minor issue) to 10 (phrasing that
     renders the message incomprehensible). A 5 would using awkward phrasing or a small grammatical error.
@@ -40,6 +42,7 @@ export const prompts = {
           "word_end": number,
           "language_item": {
             "type": "vocab" | "grammar_rule" | "phrase",
+            "purpose": string,
             "target_text": string,
             "native_text": string
           }
@@ -86,6 +89,7 @@ export const prompts = {
           "word_end": 9,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "с requires instrumental case",
             "target_text": "Я ездил туда с моей подругой",
             "native_text": "I went there with my friend (f)"
           }
@@ -100,6 +104,7 @@ export const prompts = {
           "word_end": 26,
           "language_item": {
             "type": "vocab",
+            "purpose": "музеи = museums",
             "target_text": "Мы ходили в разные музеи",
             "native_text": "We went to different museums"
           }
@@ -114,6 +119,7 @@ export const prompts = {
           "word_end": 41,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "direct object accusative",
             "target_text": "Я заказал рыбу с рисом",
             "native_text": "I ordered fish with rice"
           }
@@ -128,6 +134,7 @@ export const prompts = {
           "word_end": 49,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "avoid double comparative",
             "target_text": "Петербург красивее, чем Москва",
             "native_text": "Petersburg is more beautiful than Moscow"
           }
@@ -142,6 +149,7 @@ export const prompts = {
           "word_end": 58,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "в аэропорт after motion",
             "target_text": "Мы поехали в аэропорт",
             "native_text": "We went to the airport"
           }
@@ -169,6 +177,7 @@ export const prompts = {
           "word_end": 4,
           "language_item": {
             "type": "vocab",
+            "purpose": "tienda = store",
             "target_text": "Fui a la tienda a comprar comida",
             "native_text": "I went to the store to buy food"
           }
@@ -183,6 +192,7 @@ export const prompts = {
           "word_end": 29,
           "language_item": {
             "type": "vocab",
+            "purpose": "hambrienta = hungry",
             "target_text": "Mi hermana tenía mucha hambre",
             "native_text": "My sister was very hungry"
           }
@@ -197,6 +207,7 @@ export const prompts = {
           "word_end": 17,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "llegar a a destination",
             "target_text": "Llegué a mi casa por la noche",
             "native_text": "I arrived at my house at night"
           }
@@ -211,6 +222,7 @@ export const prompts = {
           "word_end": 21,
           "language_item": {
             "type": "grammar_rule",
+            "purpose": "preterite for completed event",
             "target_text": "Ayer cociné la cena para todos",
             "native_text": "Yesterday I cooked dinner for everyone"
           }
@@ -225,6 +237,7 @@ export const prompts = {
           "word_end": 35,
           "language_item": {
             "type": "phrase",
+            "purpose": "ver la televisión",
             "target_text": "Vimos la televisión juntos",
             "native_text": "We watched TV together"
           }

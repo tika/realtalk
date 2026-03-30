@@ -36,6 +36,7 @@ export const languageItem = pgTable("language_item", {
   ...timestamps,
   id: uuid("id").defaultRandom().primaryKey(),
   nativeText: text("native_text").notNull(),
+  purpose: text("purpose").notNull(),
   targetText: text("target_text").notNull(),
   type: languageItemType("type").notNull(),
 });

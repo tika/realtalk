@@ -161,6 +161,7 @@ const replaceStoryAnalysis = async (
         .insert(languageItem)
         .values({
           nativeText: analysisError.language_item.native_text,
+          purpose: analysisError.language_item.purpose,
           targetText: analysisError.language_item.target_text,
           type: analysisError.language_item.type,
         })

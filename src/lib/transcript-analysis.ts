@@ -15,6 +15,7 @@ export const transcriptAnalysisSchema = z.object({
       rating: z.number(),
       language_item: z.object({
         native_text: z.string(),
+        purpose: z.string(),
         target_text: z.string(),
         type: z.enum(["vocab", "grammar_rule", "phrase"]),
       }),
