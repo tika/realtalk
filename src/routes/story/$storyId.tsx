@@ -1,10 +1,13 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useIsMutating, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatRelative } from "date-fns";
 
 import { AudioPlayback } from "#/components/audio-playback";
 import { ErrorInstanceItem } from "#/components/error-instance-item";
-import { StoryActions } from "#/components/story-actions";
+import {
+  getReanalyseStoryMutationKey,
+  StoryActions,
+} from "#/components/story-actions";
 import { Button } from "#/components/ui/button";
 import { orpc } from "#/orpc/client";
 
@@ -26,6 +29,10 @@ export const Route = createFileRoute("/story/$storyId")({
 
 function StoryDetail() {
   const { storyId } = Route.useParams();
+  const reanalyseStoryMutationCount = useIsMutating({
+    mutationKey: getReanalyseStoryMutationKey(storyId),
+  });
+  const isReanalysing = reanalyseStoryMutationCount > 0;
 
   const { data: story } = useSuspenseQuery(
     orpc.story.getStory.queryOptions({ input: { id: storyId } })
@@ -56,17 +63,24 @@ function StoryDetail() {
         <StoryActions storyId={story.id} />
       </div>
 
-      <AudioPlayback url={story.audioUrl} />
+      {isReanalysing && <p className="font-medium">Re-analysing story...</p>}
 
-      <h2>Errors</h2>
-      <div>
-        {errors.map((error) => (
-          <ErrorInstanceItem key={error.id} error={error} />
-        ))}
+      <div
+        aria-busy={isReanalysing}
+        className={isReanalysing ? "pointer-events-none opacity-60" : undefined}
+      >
+        <AudioPlayback url={story.audioUrl} />
+
+        <h2>Errors</h2>
+        <div>
+          {errors.map((error) => (
+            <ErrorInstanceItem key={error.id} error={error} />
+          ))}
+        </div>
+
+        <h2>Transcript</h2>
+        <p>{story.transcript}</p>
       </div>
-
-      <h2>Transcript</h2>
-      <p>{story.transcript}</p>
     </div>
   );
 }

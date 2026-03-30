@@ -19,6 +19,9 @@ interface StoryActionsProps {
   storyId: string;
 }
 
+export const getReanalyseStoryMutationKey = (storyId: string) =>
+  ["story", "reanalyse", storyId] as const;
+
 export const StoryActions = ({ storyId }: StoryActionsProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -39,6 +42,7 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
 
   const reanalyseStory = useMutation(
     orpc.story.reanalyseStory.mutationOptions({
+      mutationKey: getReanalyseStoryMutationKey(storyId),
       onSuccess: async () => {
         await invalidateStoryQueries();
       },
@@ -76,7 +80,7 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
             disabled={reanalyseStory.isPending || deleteStory.isPending}
             onClick={handleReanalyse}
           >
-            Re-analyse
+            {reanalyseStory.isPending ? "Re-analysing..." : "Re-analyse"}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={reanalyseStory.isPending || deleteStory.isPending}
