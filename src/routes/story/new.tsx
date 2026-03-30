@@ -4,6 +4,7 @@ import { useCallback, useReducer, useRef } from "react";
 
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
+import { logError, logInfo } from "#/lib/observability";
 import { useUploadThing } from "#/lib/uploadthing";
 import { orpc } from "#/orpc/client";
 
@@ -92,6 +93,9 @@ function NewStory() {
   const createStory = useMutation(
     orpc.story.createStory.mutationOptions({
       onSuccess: async (story) => {
+        logInfo("story.create.success", {
+          storyId: story.id,
+        });
         await queryClient.invalidateQueries({
           queryKey: orpc.story.getAllStories.queryOptions({ input: {} })
             .queryKey,
@@ -102,6 +106,11 @@ function NewStory() {
         });
       },
       onError: (error) => {
+        logError("story.create.error", {
+          error,
+          prompt: "prompt" in stateRef.current ? stateRef.current.prompt : null,
+          stage: stateRef.current.stage,
+        });
         dispatch({ type: "failed", message: error.message });
       },
     })
@@ -112,12 +121,25 @@ function NewStory() {
       const { current } = stateRef;
       const uploadedUrl = res[0]?.ufsUrl;
       if (!uploadedUrl || !("prompt" in current)) {
+        logError("uploadthing.client.complete.missing-data", {
+          hasPrompt: "prompt" in current,
+          response: res,
+          uploadedUrl,
+        });
         return;
       }
+      logInfo("uploadthing.client.complete", {
+        prompt: current.prompt,
+        uploadedUrl,
+      });
       dispatch({ type: "upload-complete" });
       createStory.mutate({ audioUrl: uploadedUrl, prompt: current.prompt });
     },
     onUploadError: (error) => {
+      logError("uploadthing.client.error", {
+        error,
+        stage: stateRef.current.stage,
+      });
       dispatch({ type: "failed", message: error.message });
     },
   });
@@ -128,6 +150,10 @@ function NewStory() {
 
   const finishRecording = useCallback(
     (recording: Blob) => {
+      logInfo("recording.finish", {
+        size: recording.size,
+        type: recording.type,
+      });
       dispatch({ type: "recording-finished" });
       const file = new File([recording], "story-recording.webm", {
         type: recording.type || "audio/webm",

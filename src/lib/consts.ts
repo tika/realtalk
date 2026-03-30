@@ -1,7 +1,7 @@
 type SupportedLanguage = "english" | "spanish" | "russian" | "mandarin";
 
 export const nativeLang: SupportedLanguage = "english";
-export const targetLang: SupportedLanguage = "mandarin"; // TODO: add UI to change this
+export const targetLang: SupportedLanguage = "russian"; // TODO: add UI to change this
 
 export const sttPrompt: Record<SupportedLanguage, string> = {
   english:

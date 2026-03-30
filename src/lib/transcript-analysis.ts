@@ -11,15 +11,17 @@ export const transcriptAnalysisSchema = z.object({
   errors: z.array(
     z.object({
       context: z.string(),
-      corrected: z.string(),
+      corrected_text: z.string(),
       rating: z.number(),
       language_item: z.object({
         native_text: z.string(),
         target_text: z.string(),
         type: z.enum(["vocab", "grammar_rule", "phrase"]),
       }),
-      said: z.string(),
+      original_text: z.string(),
       type: z.enum(["blank", "mistake"]),
+      word_end: z.int().nonnegative(),
+      word_start: z.int().nonnegative(),
     })
   ),
 });

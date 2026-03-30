@@ -7,12 +7,23 @@ import { db } from "#/db";
 import { errorInstance, languageItem, story } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
 import { analyzeTranscript, transcribeAudioFromUrl } from "#/lib/ai";
+import { logError, logInfo } from "#/lib/observability";
 import { prompts } from "#/lib/prompts";
-import { transcriptWordSchema } from "#/lib/transcript";
-import type { TranscriptAnalysis } from "#/lib/transcript-analysis";
+import {
+  buildNumberedTranscript,
+  getTranscriptWordRange,
+  secondsToTimestamp,
+  transcriptWordSchema,
+} from "#/lib/transcript";
+import type { TranscriptAnalysisError } from "#/lib/transcript-analysis";
+
+interface ResolvedTranscriptAnalysisError extends TranscriptAnalysisError {
+  endTime: Date;
+  startTime: Date;
+}
 
 interface StoryAnalysisPayload {
-  errors: TranscriptAnalysis["errors"];
+  errors: ResolvedTranscriptAnalysisError[];
   transcript: string;
   timestamps: z.infer<typeof transcriptWordSchema>[];
 }
@@ -20,28 +31,63 @@ interface StoryAnalysisPayload {
 const getStoryAnalysisPayload = async (
   audioUrl: string
 ): Promise<StoryAnalysisPayload> => {
+  logInfo("story-analysis.start", {
+    audioUrl,
+  });
   const transcriptionResult = await transcribeAudioFromUrl(audioUrl);
   const transcription = match(transcriptionResult)
     .with({ success: true }, ({ data }) => data)
     .with({ success: false }, ({ error }) => {
+      logError("story-analysis.transcription-failed", {
+        audioUrl,
+        error,
+      });
       throw new Error(`Story transcription failed: ${error.message}`);
     })
     .exhaustive();
 
   const transcript = transcription.text;
   const timestamps = z.array(transcriptWordSchema).parse(transcription.words);
+  const numberedTranscript = buildNumberedTranscript(timestamps);
+  logInfo("story-analysis.transcription-ready", {
+    audioUrl,
+    transcriptLength: transcript.length,
+    wordCount: timestamps.length,
+  });
   const transcriptAnalysisResult = await analyzeTranscript(
-    prompts.findErrors(transcript)
+    prompts.findErrors(`Transcript: "${numberedTranscript}"`)
   );
   const transcriptAnalysis = match(transcriptAnalysisResult)
     .with({ success: true }, ({ data }) => data)
     .with({ success: false }, ({ error }) => {
+      logError("story-analysis.model-failed", {
+        audioUrl,
+        error,
+      });
       throw new Error(`Story analysis failed: ${error.message}`);
     })
     .exhaustive();
+  const resolvedErrors = transcriptAnalysis.errors.map((analysisError) => {
+    const { end, start } = getTranscriptWordRange(
+      timestamps,
+      analysisError.word_start,
+      analysisError.word_end
+    );
+
+    return {
+      ...analysisError,
+      endTime: secondsToTimestamp(end),
+      startTime: secondsToTimestamp(start),
+    };
+  });
+
+  logInfo("story-analysis.success", {
+    audioUrl,
+    errorCount: resolvedErrors.length,
+  });
 
   return {
-    errors: transcriptAnalysis.errors,
+    errors: resolvedErrors,
     transcript,
     timestamps,
   };
@@ -122,11 +168,13 @@ const replaceStoryAnalysis = async (
 
       await tx.insert(errorInstance).values({
         context: analysisError.context,
-        corrected_text: analysisError.corrected,
+        corrected_text: analysisError.corrected_text,
+        endTime: analysisError.endTime,
         errorType: analysisError.type,
         languageItemId: createdLanguageItem.id,
         rating: analysisError.rating,
-        original_text: analysisError.said,
+        original_text: analysisError.original_text,
+        startTime: analysisError.startTime,
         storyId,
       });
     }
@@ -172,6 +220,10 @@ export const createStory = os
     })
   )
   .handler(async ({ input }) => {
+    logInfo("story.create.start", {
+      audioUrl: input.audioUrl,
+      prompt: input.prompt,
+    });
     const [createdStory] = await db
       .insert(story)
       .values({
@@ -181,12 +233,19 @@ export const createStory = os
       .returning();
     const analysis = await getStoryAnalysisPayload(input.audioUrl);
 
+    logInfo("story.create.analysis-ready", {
+      errorCount: analysis.errors.length,
+      storyId: createdStory.id,
+    });
     return await replaceStoryAnalysis(createdStory.id, analysis);
   });
 
 export const reanalyseStory = os
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input }) => {
+    logInfo("story.reanalyse.start", {
+      storyId: input.id,
+    });
     const [existingStory] = await db
       .select({
         audioUrl: story.audioUrl,
@@ -201,6 +260,10 @@ export const reanalyseStory = os
 
     const analysis = await getStoryAnalysisPayload(existingStory.audioUrl);
 
+    logInfo("story.reanalyse.analysis-ready", {
+      errorCount: analysis.errors.length,
+      storyId: input.id,
+    });
     return await replaceStoryAnalysis(input.id, analysis);
   });
 

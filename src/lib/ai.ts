@@ -4,6 +4,7 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 
 import { fetchAudioFileFromUrl } from "#/lib/audio";
+import { logError, logInfo } from "#/lib/observability";
 import { err, ok } from "#/lib/result";
 import type { Result } from "#/lib/result";
 import { transcriptWordSchema } from "#/lib/transcript";
@@ -14,7 +15,7 @@ import { sttPrompt, targetLang } from "./consts";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TRANSCRIPTION_MODEL = "whisper-1";
-const ANALYSIS_MODEL = "anthropic/claude-sonnet-4.6";
+const ANALYSIS_MODEL = "anthropic/claude-3.5-sonnet";
 
 const getOpenAIClient = () => {
   if (!process.env.OPENAI_KEY) {
@@ -45,10 +46,22 @@ export const transcribeAudioFromUrl = async (
   return await match(clientResult)
     .with({ success: false }, ({ error }) => err(error))
     .with({ success: true }, async ({ data: client }) => {
+      logInfo("transcription.start", {
+        audioUrl,
+        model: TRANSCRIPTION_MODEL,
+      });
+
       const fileResult = await fetchAudioFileFromUrl(audioUrl);
 
       return await match(fileResult)
-        .with({ success: false }, ({ error }) => err(error))
+        .with({ success: false }, ({ error }) => {
+          logError("transcription.audio-fetch.error", {
+            audioUrl,
+            error,
+            model: TRANSCRIPTION_MODEL,
+          });
+          return err(error);
+        })
         .with({ success: true }, async ({ data: file }) => {
           try {
             const transcription = await client.audio.transcriptions.create({
@@ -59,6 +72,13 @@ export const transcribeAudioFromUrl = async (
               prompt: sttPrompt[targetLang],
             });
 
+            logInfo("transcription.success", {
+              audioUrl,
+              model: TRANSCRIPTION_MODEL,
+              textLength: transcription.text.length,
+              wordCount: transcription.words?.length ?? 0,
+            });
+
             return ok({
               text: transcription.text,
               words: z
@@ -66,6 +86,11 @@ export const transcribeAudioFromUrl = async (
                 .parse(transcription.words ?? []),
             });
           } catch (error: unknown) {
+            logError("transcription.error", {
+              audioUrl,
+              error,
+              model: TRANSCRIPTION_MODEL,
+            });
             return err(
               error instanceof Error
                 ? error
@@ -87,6 +112,10 @@ export const analyzeTranscript = async (
     .with({ success: false }, ({ error }) => err(error))
     .with({ success: true }, async ({ data: client }) => {
       try {
+        logInfo("transcript-analysis.start", {
+          model: ANALYSIS_MODEL,
+          promptLength: prompt.length,
+        });
         const completion = await client.chat.completions.parse({
           model: ANALYSIS_MODEL,
           messages: [{ role: "user", content: prompt }],
@@ -98,13 +127,24 @@ export const analyzeTranscript = async (
         const parsedMessage = completion.choices[0]?.message.parsed;
 
         if (!parsedMessage) {
+          logError("transcript-analysis.empty-payload", {
+            model: ANALYSIS_MODEL,
+          });
           return err(
             new Error("AI transcript analysis returned no parsed payload")
           );
         }
 
+        logInfo("transcript-analysis.success", {
+          errorCount: parsedMessage.errors.length,
+          model: ANALYSIS_MODEL,
+        });
         return ok(parsedMessage);
       } catch (error: unknown) {
+        logError("transcript-analysis.error", {
+          error,
+          model: ANALYSIS_MODEL,
+        });
         return err(
           error instanceof Error
             ? error

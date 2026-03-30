@@ -6,5 +6,8 @@ export const ErrorInstanceItem = ({ error }: { error: ErrorInstance }) => (
     <p>{error.rating}</p>
     <p className="text-red-500">{error.original_text}</p>
     <p className="text-green-500">{error.corrected_text}</p>
+    <p>
+      {error.startTime.toString()} - {error.endTime.toString()}
+    </p>
   </div>
 );

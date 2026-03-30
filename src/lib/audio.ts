@@ -1,5 +1,6 @@
 import { match } from "ts-pattern";
 
+import { logError, logInfo } from "#/lib/observability";
 import { err, ok } from "#/lib/result";
 import type { Result } from "#/lib/result";
 
@@ -38,9 +39,17 @@ export const fetchAudioFileFromUrl = async (
   }
 
   try {
+    logInfo("audio.fetch.start", {
+      audioUrl,
+    });
     const response = await fetch(audioUrl);
 
     if (!response.ok) {
+      logError("audio.fetch.response-not-ok", {
+        audioUrl,
+        status: response.status,
+        statusText: response.statusText,
+      });
       return err(
         new Error(
           `Failed to fetch audio from ${audioUrl}: ${response.status} ${response.statusText}`
@@ -52,12 +61,23 @@ export const fetchAudioFileFromUrl = async (
     const extension = getAudioExtensionFromMimeType(mimeType);
     const audioBuffer = await response.arrayBuffer();
 
+    logInfo("audio.fetch.success", {
+      audioUrl,
+      byteLength: audioBuffer.byteLength,
+      extension,
+      mimeType,
+    });
+
     return ok(
       new File([audioBuffer], `story-recording.${extension}`, {
         type: mimeType,
       })
     );
   } catch (error: unknown) {
+    logError("audio.fetch.error", {
+      audioUrl,
+      error,
+    });
     return err(
       error instanceof Error
         ? error

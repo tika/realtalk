@@ -4,6 +4,7 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -49,14 +50,11 @@ export const errorInstance = pgTable("error_instance", {
   original_text: text("original_text").notNull(),
   context: text("context").notNull(), // context around the error
   rating: integer("rating").notNull().default(5),
+  startTime: timestamp("start_time").notNull(),
+  endTime: timestamp("end_time").notNull(),
 
   storyId: uuid("story_id")
     .notNull()
     .references(() => story.id),
-
-  // when did the error happen in the transcript?
-  // TODO: it turns out this is quite hard to do, we can do this later
-  // startTime: timestamp("start_time").notNull(),
-  // endTime: timestamp("end_time").notNull(),
 });
 export type ErrorInstance = typeof errorInstance.$inferSelect;

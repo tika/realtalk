@@ -45,7 +45,7 @@ const RootDocument = ({ children }: { children: React.ReactNode }) => (
     </body>
   </html>
 );
-/* eslint-enable react/no-danger */
+/**/
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
