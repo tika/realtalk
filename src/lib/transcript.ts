@@ -13,6 +13,9 @@ export const transcriptWordSchema = z.object({
 
 export type TranscriptWord = z.infer<typeof transcriptWordSchema>;
 
+const secondsToMilliseconds = (valueInSeconds: number) =>
+  Math.round(valueInSeconds * 1000);
+
 export const buildNumberedTranscript = (words: TranscriptWord[]) =>
   words.map((word, index) => `[${index}] ${word.word.trim()}`).join(" ");
 
@@ -29,14 +32,6 @@ export const normalizeTranscriptText = (value: string) =>
 
 export const tokenizeTranscriptText = (value: string) =>
   normalizeTranscriptText(value).split(" ").filter(Boolean);
-
-/**
- * Converts a transcript offset in seconds into a stable Date object anchored
- * to the Unix epoch. This is useful when a consumer requires a Date-like shape
- * for relative media timing rather than wall-clock time.
- */
-export const secondsToTimestamp = (seconds: number) =>
-  new Date(Math.max(0, seconds) * 1000);
 
 export const getTranscriptWordRange = (
   words: TranscriptWord[],
@@ -59,7 +54,7 @@ export const getTranscriptWordRange = (
   }
 
   return {
-    end: endWord.end,
-    start: startWord.start,
+    end: secondsToMilliseconds(endWord.end),
+    start: secondsToMilliseconds(startWord.start),
   };
 };

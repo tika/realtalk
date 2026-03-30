@@ -4,7 +4,6 @@ import {
   pgEnum,
   pgTable,
   text,
-  timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -51,8 +50,8 @@ export const errorInstance = pgTable("error_instance", {
   original_text: text("original_text").notNull(),
   context: text("context").notNull(), // context around the error
   rating: integer("rating").notNull().default(5),
-  startTime: timestamp("start_time").notNull(),
-  endTime: timestamp("end_time").notNull(),
+  startTimeMs: integer("start_time_ms").notNull(),
+  endTimeMs: integer("end_time_ms").notNull(),
 
   storyId: uuid("story_id")
     .notNull()

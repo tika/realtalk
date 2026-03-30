@@ -74,7 +74,11 @@ function StoryDetail() {
         <h2>Errors</h2>
         <div>
           {errors.map((error) => (
-            <ErrorInstanceItem key={error.id} error={error} />
+            <ErrorInstanceItem
+              key={error.id}
+              error={error}
+              audioUrl={story.audioUrl}
+            />
           ))}
         </div>
 

@@ -12,14 +12,13 @@ import { prompts } from "#/lib/prompts";
 import {
   buildNumberedTranscript,
   getTranscriptWordRange,
-  secondsToTimestamp,
   transcriptWordSchema,
 } from "#/lib/transcript";
 import type { TranscriptAnalysisError } from "#/lib/transcript-analysis";
 
 interface ResolvedTranscriptAnalysisError extends TranscriptAnalysisError {
-  endTime: Date;
-  startTime: Date;
+  endTimeMs: number;
+  startTimeMs: number;
 }
 
 interface StoryAnalysisPayload {
@@ -76,8 +75,8 @@ const getStoryAnalysisPayload = async (
 
     return {
       ...analysisError,
-      endTime: secondsToTimestamp(end),
-      startTime: secondsToTimestamp(start),
+      endTimeMs: end,
+      startTimeMs: start,
     };
   });
 
@@ -170,12 +169,12 @@ const replaceStoryAnalysis = async (
       await tx.insert(errorInstance).values({
         context: analysisError.context,
         corrected_text: analysisError.corrected_text,
-        endTime: analysisError.endTime,
+        endTimeMs: analysisError.endTimeMs,
         errorType: analysisError.type,
         languageItemId: createdLanguageItem.id,
         rating: analysisError.rating,
         original_text: analysisError.original_text,
-        startTime: analysisError.startTime,
+        startTimeMs: analysisError.startTimeMs,
         storyId,
       });
     }
