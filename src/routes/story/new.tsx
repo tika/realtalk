@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useReducer, useRef } from "react";
+import { useCallback, useReducer, useRef, useState } from "react";
 
+import { NewStoryDialog } from "#/components/new-story-dialog";
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
 import { logError, logInfo } from "#/lib/observability";
@@ -35,14 +36,18 @@ const PromptButton = ({
   );
 };
 
+type Mode = "single" | "reinforce";
+
 type State =
-  | { stage: "prompt-selection" }
-  | { stage: "recording-story"; prompt: string }
-  | { stage: "uploading"; prompt: string }
-  | { stage: "analysing"; prompt: string }
-  | { stage: "error"; prompt: string; message: string };
+  | { stage: "mode-selection" }
+  | { stage: "prompt-selection"; mode: Mode }
+  | { stage: "recording-story"; mode: Mode; prompt: string }
+  | { stage: "uploading"; mode: Mode; prompt: string }
+  | { stage: "analysing"; mode: Mode; prompt: string }
+  | { stage: "error"; mode: Mode; prompt: string; message: string };
 
 type Action =
+  | { type: "mode-selected"; mode: Mode }
   | { type: "prompt-selected"; prompt: string }
   | { type: "recording-finished" }
   | { type: "upload-complete" }
@@ -51,29 +56,44 @@ type Action =
 
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
+    case "mode-selected": {
+      return { stage: "prompt-selection", mode: action.mode };
+    }
     case "prompt-selected": {
-      return { stage: "recording-story", prompt: action.prompt };
+      if (state.stage !== "prompt-selection") {
+        return state;
+      }
+      return {
+        stage: "recording-story",
+        mode: state.mode,
+        prompt: action.prompt,
+      };
     }
     case "recording-finished": {
       if (state.stage !== "recording-story") {
         return state;
       }
-      return { stage: "uploading", prompt: state.prompt };
+      return { stage: "uploading", mode: state.mode, prompt: state.prompt };
     }
     case "upload-complete": {
       if (state.stage !== "uploading") {
         return state;
       }
-      return { stage: "analysing", prompt: state.prompt };
+      return { stage: "analysing", mode: state.mode, prompt: state.prompt };
     }
     case "failed": {
       if (!("prompt" in state)) {
         return state;
       }
-      return { stage: "error", prompt: state.prompt, message: action.message };
+      return {
+        stage: "error",
+        mode: state.mode,
+        prompt: state.prompt,
+        message: action.message,
+      };
     }
     case "reset": {
-      return { stage: "prompt-selection" };
+      return { stage: "mode-selection" };
     }
     default: {
       return state;
@@ -99,18 +119,24 @@ const uploadAudio = async (blob: Blob): Promise<string> => {
 };
 
 function NewStory() {
-  const [state, dispatch] = useReducer(reducer, { stage: "prompt-selection" });
+  const [state, dispatch] = useReducer(reducer, { stage: "mode-selection" });
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const createStory = useMutation(
+  const createSeries = useMutation(
+    orpc.series.createSeries.mutationOptions({})
+  );
+
+  const createRecording = useMutation(
     orpc.recording.createRecording.mutationOptions({
-      onSuccess: async (story) => {
-        logInfo("story.create.success", {
-          storyId: story.id,
+      onSuccess: async (recording) => {
+        logInfo("recording.create.success", {
+          recordingId: recording.id,
         });
         await queryClient.invalidateQueries({
           queryKey: orpc.recording.getAllRecordings.queryOptions({ input: {} })
@@ -118,11 +144,11 @@ function NewStory() {
         });
         await navigate({
           to: "/story/$storyId",
-          params: { storyId: story.id },
+          params: { storyId: recording.id },
         });
       },
       onError: (error) => {
-        logError("story.create.error", {
+        logError("recording.create.error", {
           error,
           prompt: "prompt" in stateRef.current ? stateRef.current.prompt : null,
           stage: stateRef.current.stage,
@@ -132,28 +158,44 @@ function NewStory() {
     })
   );
 
+  const handleModeSelected = useCallback((mode: Mode) => {
+    dispatch({ type: "mode-selected", mode });
+  }, []);
+
   const selectPrompt = useCallback((prompt: string) => {
     dispatch({ type: "prompt-selected", prompt });
   }, []);
 
   const finishRecording = useCallback(
-    async (recording: Blob) => {
+    async (blob: Blob) => {
       const { current } = stateRef;
       if (!("prompt" in current)) {
         return;
       }
 
       logInfo("recording.finish", {
-        size: recording.size,
-        type: recording.type,
+        size: blob.size,
+        type: blob.type,
       });
       dispatch({ type: "recording-finished" });
 
       try {
-        const audioKey = await uploadAudio(recording);
+        const audioKey = await uploadAudio(blob);
         logInfo("upload.complete", { audioKey });
         dispatch({ type: "upload-complete" });
-        createStory.mutate({ audioKey, prompt: current.prompt });
+
+        if (current.mode === "reinforce") {
+          const series = await createSeries.mutateAsync({
+            title: `Story: ${current.prompt}`,
+          });
+          createRecording.mutate({
+            audioKey,
+            prompt: current.prompt,
+            seriesId: series.id,
+          });
+        } else {
+          createRecording.mutate({ audioKey, prompt: current.prompt });
+        }
       } catch (error: unknown) {
         logError("upload.error", { error });
         dispatch({
@@ -162,16 +204,33 @@ function NewStory() {
         });
       }
     },
-    [createStory]
+    [createRecording, createSeries]
   );
 
   const reset = useCallback(() => {
     dispatch({ type: "reset" });
   }, []);
 
+  const openDialog = useCallback(() => {
+    setDialogOpen(true);
+  }, []);
+
   return (
     <main>
       <div>
+        {state.stage === "mode-selection" && (
+          <>
+            <h1>New story</h1>
+            <Button type="button" onClick={openDialog}>
+              Get started
+            </Button>
+            <NewStoryDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              onSelect={handleModeSelected}
+            />
+          </>
+        )}
         {state.stage === "prompt-selection" && (
           <>
             <h1>Select a prompt for your story</h1>

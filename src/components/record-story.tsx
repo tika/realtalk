@@ -2,7 +2,6 @@ import { Microphone, PauseIcon, PlayIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { useAudioRecorder } from "#/hooks/use-audio-recorder";
-import { formatElapsedTime } from "#/lib/utils";
 
 import { Button } from "./ui/button";
 
@@ -61,7 +60,7 @@ export const RecordStory = ({
             </Button>
           </div>
           <p className="text-sm tabular-nums text-muted-foreground">
-            {formatElapsedTime(elapsedMilliseconds)}
+            {elapsedMilliseconds}
           </p>
         </>
       )}

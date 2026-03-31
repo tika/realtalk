@@ -22,6 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1020.0",
     "@aws-sdk/s3-request-presigner": "^3.1020.0",
+    "@fontsource-variable/public-sans": "^5.2.7",
     "@hugeicons/core-free-icons": "^4.0.0",
     "@hugeicons/react": "^1.1.6",
     "@orpc/client": "^1.13.6",
@@ -52,6 +53,7 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "shadcn": "^4.1.2",
     "tailwind-merge": "^3.0.2",
     "tailwindcss": "^4.1.18",
     "ts-pattern": "^5.9.0",

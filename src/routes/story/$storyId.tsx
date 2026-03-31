@@ -16,11 +16,13 @@ export const Route = createFileRoute("/story/$storyId")({
   loader: async ({ context, params }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(
-        orpc.story.getStory.queryOptions({ input: { id: params.storyId } })
+        orpc.recording.getRecording.queryOptions({
+          input: { id: params.storyId },
+        })
       ),
       context.queryClient.ensureQueryData(
-        orpc.errorInstance.getErrorInstancesForStory.queryOptions({
-          input: { storyId: params.storyId },
+        orpc.errorInstance.getErrorInstancesForRecording.queryOptions({
+          input: { recordingId: params.storyId },
         })
       ),
     ]);
@@ -35,12 +37,12 @@ function StoryDetail() {
   const isReanalysing = reanalyseStoryMutationCount > 0;
 
   const { data: story } = useSuspenseQuery(
-    orpc.story.getStory.queryOptions({ input: { id: storyId } })
+    orpc.recording.getRecording.queryOptions({ input: { id: storyId } })
   );
 
   const { data: errors } = useSuspenseQuery(
-    orpc.errorInstance.getErrorInstancesForStory.queryOptions({
-      input: { storyId },
+    orpc.errorInstance.getErrorInstancesForRecording.queryOptions({
+      input: { recordingId: storyId },
     })
   );
 

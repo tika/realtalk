@@ -20,50 +20,52 @@ interface StoryActionsProps {
 }
 
 export const getReanalyseStoryMutationKey = (storyId: string) =>
-  ["story", "reanalyse", storyId] as const;
+  ["recording", "reanalyse", storyId] as const;
 
 export const StoryActions = ({ storyId }: StoryActionsProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const invalidateStoryQueries = useCallback(async () => {
+  const invalidateRecordingQueries = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: orpc.story.getAllStories.queryOptions({ input: {} }).queryKey,
-    });
-    await queryClient.invalidateQueries({
-      queryKey: orpc.story.getStory.queryOptions({ input: { id: storyId } })
+      queryKey: orpc.recording.getAllRecordings.queryOptions({ input: {} })
         .queryKey,
     });
     await queryClient.invalidateQueries({
-      queryKey: orpc.errorInstance.getErrorInstancesForStory.queryOptions({
-        input: { storyId },
+      queryKey: orpc.recording.getRecording.queryOptions({
+        input: { id: storyId },
+      }).queryKey,
+    });
+    await queryClient.invalidateQueries({
+      queryKey: orpc.errorInstance.getErrorInstancesForRecording.queryOptions({
+        input: { recordingId: storyId },
       }).queryKey,
     });
   }, [queryClient, storyId]);
 
-  const reanalyseStory = useMutation(
-    orpc.story.reanalyseStory.mutationOptions({
+  const reanalyseRecording = useMutation(
+    orpc.recording.reanalyseRecording.mutationOptions({
       mutationKey: getReanalyseStoryMutationKey(storyId),
       onSuccess: async () => {
-        await invalidateStoryQueries();
+        await invalidateRecordingQueries();
       },
     })
   );
-  const deleteStory = useMutation(
-    orpc.story.deleteStory.mutationOptions({
+  const deleteRecording = useMutation(
+    orpc.recording.deleteRecording.mutationOptions({
       onSuccess: async () => {
-        await invalidateStoryQueries();
+        await invalidateRecordingQueries();
         await navigate({ to: "/" });
       },
     })
   );
 
   const handleReanalyse = useCallback(() => {
-    reanalyseStory.mutate({ id: storyId });
-  }, [reanalyseStory, storyId]);
+    reanalyseRecording.mutate({ id: storyId });
+  }, [reanalyseRecording, storyId]);
 
   const handleDelete = useCallback(() => {
-    deleteStory.mutate({ id: storyId });
-  }, [deleteStory, storyId]);
+    deleteRecording.mutate({ id: storyId });
+  }, [deleteRecording, storyId]);
 
   return (
     <DropdownMenu>
@@ -77,13 +79,13 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
-            disabled={reanalyseStory.isPending || deleteStory.isPending}
+            disabled={reanalyseRecording.isPending || deleteRecording.isPending}
             onClick={handleReanalyse}
           >
-            {reanalyseStory.isPending ? "Re-analysing..." : "Re-analyse"}
+            {reanalyseRecording.isPending ? "Re-analysing..." : "Re-analyse"}
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={reanalyseStory.isPending || deleteStory.isPending}
+            disabled={reanalyseRecording.isPending || deleteRecording.isPending}
             onClick={handleDelete}
           >
             Delete

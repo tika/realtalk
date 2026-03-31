@@ -12,6 +12,7 @@
     "no-use-before-define": "off",
     "func-style": "off",
     "no-warning-comments": "off",
-    "unicorn/filename-case": "off"
+    "unicorn/filename-case": "off",
+    "react/no-unescaped-entities": "off"
   }
 }

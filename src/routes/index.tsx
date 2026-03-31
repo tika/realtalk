@@ -6,8 +6,8 @@ import { Button } from "#/components/ui/button";
 import { orpc } from "#/orpc/client";
 
 const App = () => {
-  const { data: stories } = useSuspenseQuery(
-    orpc.story.getAllStories.queryOptions({ input: {} })
+  const { data: recordings } = useSuspenseQuery(
+    orpc.recording.getAllRecordings.queryOptions({ input: {} })
   );
 
   return (
@@ -19,13 +19,13 @@ const App = () => {
         </Link>
       </div>
       <div className="flex flex-col gap-2 mt-4">
-        {stories.map((story) => (
+        {recordings.map((recording) => (
           <Link
-            key={story.id}
+            key={recording.id}
             to="/story/$storyId"
-            params={{ storyId: story.id }}
+            params={{ storyId: recording.id }}
           >
-            <StoryListItem story={story} />
+            <StoryListItem story={recording} />
           </Link>
         ))}
       </div>
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/")({
   component: App,
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData(
-      orpc.story.getAllStories.queryOptions({ input: {} })
+      orpc.recording.getAllRecordings.queryOptions({ input: {} })
     );
   },
 });

@@ -5,55 +5,46 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { env } from "#/lib/env";
 import { logError, logInfo } from "#/lib/observability";
 import { err, ok } from "#/lib/result";
 import type { Result } from "#/lib/result";
 
 const PRESIGNED_URL_EXPIRY = 3600; // 1 hour
 
-const getS3Client = () => {
-  const region = process.env.AWS_REGION;
-  const bucket = process.env.S3_BUCKET;
-
-  if (!region || !bucket) {
-    return err(
-      new Error("AWS_REGION and S3_BUCKET environment variables are required")
-    );
-  }
-
-  return ok({ client: new S3Client({ region }), bucket });
-};
+const r2 = new S3Client({
+  region: "auto",
+  endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  forcePathStyle: true,
+  credentials: {
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+  },
+});
 
 export const uploadToS3 = async (
   key: string,
   body: Buffer | Uint8Array,
   contentType: string
 ): Promise<Result<{ key: string }>> => {
-  const s3Result = getS3Client();
-  if (!s3Result.success) {
-    return err(s3Result.error);
-  }
-
-  const { client, bucket } = s3Result.data;
-
   try {
-    logInfo("s3.upload.start", { bucket, key, contentType });
+    logInfo("r2.upload.start", { key, contentType });
 
-    await client.send(
+    await r2.send(
       new PutObjectCommand({
-        Bucket: bucket,
+        Bucket: env.R2_BUCKET,
         Key: key,
         Body: body,
         ContentType: contentType,
       })
     );
 
-    logInfo("s3.upload.success", { bucket, key });
+    logInfo("r2.upload.success", { key });
     return ok({ key });
   } catch (error: unknown) {
-    logError("s3.upload.error", { bucket, key, error });
+    logError("r2.upload.error", { key, error });
     return err(
-      error instanceof Error ? error : new Error("Failed to upload to S3")
+      error instanceof Error ? error : new Error("Failed to upload to R2")
     );
   }
 };
@@ -61,23 +52,16 @@ export const uploadToS3 = async (
 export const getPresignedDownloadUrl = async (
   key: string
 ): Promise<Result<string>> => {
-  const s3Result = getS3Client();
-  if (!s3Result.success) {
-    return err(s3Result.error);
-  }
-
-  const { client, bucket } = s3Result.data;
-
   try {
     const url = await getSignedUrl(
-      client,
-      new GetObjectCommand({ Bucket: bucket, Key: key }),
+      r2,
+      new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: key }),
       { expiresIn: PRESIGNED_URL_EXPIRY }
     );
 
     return ok(url);
   } catch (error: unknown) {
-    logError("s3.presign.error", { bucket, key, error });
+    logError("r2.presign.error", { key, error });
     return err(
       error instanceof Error
         ? error
