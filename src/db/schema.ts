@@ -24,7 +24,7 @@ export const languageItemType = pgEnum("language_item_type", [
 export const recording = pgTable("recording", {
   ...timestamps,
   id: uuid("id").defaultRandom().primaryKey(),
-  audioUrl: text("audio_url").notNull(), // link to blob
+  audioKey: text("audio_key").notNull(), // S3 object key
   prompt: text("prompt").notNull(),
   transcript: text("transcript"),
   timestamps: json("timestamps"), // from transcription api

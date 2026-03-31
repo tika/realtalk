@@ -9,6 +9,7 @@ import { notDeleted } from "#/db/soft-delete";
 import { analyzeTranscript, transcribeAudioFromUrl } from "#/lib/ai";
 import { logError, logInfo } from "#/lib/observability";
 import { prompts } from "#/lib/prompts";
+import { getPresignedDownloadUrl } from "#/lib/s3";
 import {
   buildNumberedTranscript,
   getTranscriptWordRange,
@@ -27,12 +28,24 @@ interface RecordingAnalysisPayload {
   timestamps: z.infer<typeof transcriptWordSchema>[];
 }
 
+const resolveAudioUrl = async (audioKey: string): Promise<string> => {
+  const urlResult = await getPresignedDownloadUrl(audioKey);
+
+  return match(urlResult)
+    .with({ success: true }, ({ data }) => data)
+    .with({ success: false }, ({ error }) => {
+      throw new Error(`Failed to resolve audio URL: ${error.message}`);
+    })
+    .exhaustive();
+};
+
 const getRecordingAnalysisPayload = async (
-  audioUrl: string
+  audioKey: string
 ): Promise<RecordingAnalysisPayload> => {
   logInfo("recording-analysis.start", {
-    audioUrl,
+    audioKey,
   });
+  const audioUrl = await resolveAudioUrl(audioKey);
   const transcriptionResult = await transcribeAudioFromUrl(audioUrl);
   const transcription = match(transcriptionResult)
     .with({ success: true }, ({ data }) => data)
@@ -188,24 +201,37 @@ const replaceRecordingAnalysis = async (
 // return a list of all recordings
 // input: nothing
 // output: array of recording objects straight from db
-export const getAllRecordings = os
-  .input(z.object({}))
-  .handler(
-    async () => await db.select().from(recording).where(notDeleted(recording))
-  );
+const withResolvedAudioUrl = async <T extends { audioKey: string }>(
+  record: T
+): Promise<T & { audioUrl: string }> => {
+  const audioUrl = await resolveAudioUrl(record.audioKey);
+  return { ...record, audioUrl };
+};
+
+export const getAllRecordings = os.input(z.object({})).handler(async () => {
+  const rows = await db.select().from(recording).where(notDeleted(recording));
+  return await Promise.all(rows.map(withResolvedAudioUrl));
+});
 
 // return a single recording by id
 // input: recording id
 // output: recording object from db
-export const getRecording = os.input(z.object({ id: z.uuid() })).handler(
-  async ({ input }) =>
-    await db
+export const getRecording = os
+  .input(z.object({ id: z.uuid() }))
+  .handler(async ({ input }) => {
+    const row = await db
       .select()
       .from(recording)
       .where(and(eq(recording.id, input.id), notDeleted(recording)))
       .limit(1)
-      .then((rows) => rows[0])
-);
+      .then((rows) => rows[0]);
+
+    if (!row) {
+      return;
+    }
+
+    return await withResolvedAudioUrl(row);
+  });
 
 // create a new recording after you've recorded
 // input: audio blob url, selected prompt
@@ -219,26 +245,26 @@ export const getRecording = os.input(z.object({ id: z.uuid() })).handler(
 export const createRecording = os
   .input(
     z.object({
-      audioUrl: z.url(),
+      audioKey: z.string().min(1),
       prompt: z.string().min(1),
       seriesId: z.uuid().optional(),
     })
   )
   .handler(async ({ input }) => {
     logInfo("recording.create.start", {
-      audioUrl: input.audioUrl,
+      audioKey: input.audioKey,
       prompt: input.prompt,
       seriesId: input.seriesId,
     });
     const [createdRecording] = await db
       .insert(recording)
       .values({
-        audioUrl: input.audioUrl,
+        audioKey: input.audioKey,
         prompt: input.prompt,
         seriesId: input.seriesId,
       })
       .returning();
-    const analysis = await getRecordingAnalysisPayload(input.audioUrl);
+    const analysis = await getRecordingAnalysisPayload(input.audioKey);
 
     logInfo("recording.create.analysis-ready", {
       errorCount: analysis.errors.length,
@@ -255,7 +281,7 @@ export const reanalyseRecording = os
     });
     const [existingRecording] = await db
       .select({
-        audioUrl: recording.audioUrl,
+        audioKey: recording.audioKey,
       })
       .from(recording)
       .where(and(eq(recording.id, input.id), notDeleted(recording)))
@@ -266,7 +292,7 @@ export const reanalyseRecording = os
     }
 
     const analysis = await getRecordingAnalysisPayload(
-      existingRecording.audioUrl
+      existingRecording.audioKey
     );
 
     logInfo("recording.reanalyse.analysis-ready", {

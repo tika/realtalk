@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StoryNewRouteImport } from './routes/story/new'
 import { Route as StoryStoryIdRouteImport } from './routes/story/$storyId'
-import { Route as ApiUploadthingRouteImport } from './routes/api.uploadthing'
+import { Route as ApiUploadRouteImport } from './routes/api.upload'
 import { Route as ApiRpcSplatRouteImport } from './routes/api.rpc.$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -30,9 +30,9 @@ const StoryStoryIdRoute = StoryStoryIdRouteImport.update({
   path: '/story/$storyId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiUploadthingRoute = ApiUploadthingRouteImport.update({
-  id: '/api/uploadthing',
-  path: '/api/uploadthing',
+const ApiUploadRoute = ApiUploadRouteImport.update({
+  id: '/api/upload',
+  path: '/api/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
@@ -43,14 +43,14 @@ const ApiRpcSplatRoute = ApiRpcSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/upload': typeof ApiUploadRoute
   '/story/$storyId': typeof StoryStoryIdRoute
   '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/upload': typeof ApiUploadRoute
   '/story/$storyId': typeof StoryStoryIdRoute
   '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
@@ -58,7 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/api/uploadthing': typeof ApiUploadthingRoute
+  '/api/upload': typeof ApiUploadRoute
   '/story/$storyId': typeof StoryStoryIdRoute
   '/story/new': typeof StoryNewRoute
   '/api/rpc/$': typeof ApiRpcSplatRoute
@@ -67,16 +67,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/api/uploadthing'
+    | '/api/upload'
     | '/story/$storyId'
     | '/story/new'
     | '/api/rpc/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/uploadthing' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
+  to: '/' | '/api/upload' | '/story/$storyId' | '/story/new' | '/api/rpc/$'
   id:
     | '__root__'
     | '/'
-    | '/api/uploadthing'
+    | '/api/upload'
     | '/story/$storyId'
     | '/story/new'
     | '/api/rpc/$'
@@ -84,7 +84,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ApiUploadthingRoute: typeof ApiUploadthingRoute
+  ApiUploadRoute: typeof ApiUploadRoute
   StoryStoryIdRoute: typeof StoryStoryIdRoute
   StoryNewRoute: typeof StoryNewRoute
   ApiRpcSplatRoute: typeof ApiRpcSplatRoute
@@ -113,11 +113,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StoryStoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/uploadthing': {
-      id: '/api/uploadthing'
-      path: '/api/uploadthing'
-      fullPath: '/api/uploadthing'
-      preLoaderRoute: typeof ApiUploadthingRouteImport
+    '/api/upload': {
+      id: '/api/upload'
+      path: '/api/upload'
+      fullPath: '/api/upload'
+      preLoaderRoute: typeof ApiUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/rpc/$': {
@@ -132,7 +132,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ApiUploadthingRoute: ApiUploadthingRoute,
+  ApiUploadRoute: ApiUploadRoute,
   StoryStoryIdRoute: StoryStoryIdRoute,
   StoryNewRoute: StoryNewRoute,
   ApiRpcSplatRoute: ApiRpcSplatRoute,

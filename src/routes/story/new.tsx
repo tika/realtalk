@@ -5,7 +5,6 @@ import { useCallback, useReducer, useRef } from "react";
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
 import { logError, logInfo } from "#/lib/observability";
-import { useUploadThing } from "#/lib/uploadthing";
 import { orpc } from "#/orpc/client";
 
 export const Route = createFileRoute("/story/new")({
@@ -82,6 +81,23 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
+const uploadAudio = async (blob: Blob): Promise<string> => {
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: {
+      "content-type": blob.type || "audio/webm",
+    },
+    body: blob,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+  }
+
+  const { key } = (await response.json()) as { key: string };
+  return key;
+};
+
 function NewStory() {
   const [state, dispatch] = useReducer(reducer, { stage: "prompt-selection" });
   const stateRef = useRef(state);
@@ -91,13 +107,13 @@ function NewStory() {
   const queryClient = useQueryClient();
 
   const createStory = useMutation(
-    orpc.story.createStory.mutationOptions({
+    orpc.recording.createRecording.mutationOptions({
       onSuccess: async (story) => {
         logInfo("story.create.success", {
           storyId: story.id,
         });
         await queryClient.invalidateQueries({
-          queryKey: orpc.story.getAllStories.queryOptions({ input: {} })
+          queryKey: orpc.recording.getAllRecordings.queryOptions({ input: {} })
             .queryKey,
         });
         await navigate({
@@ -116,51 +132,37 @@ function NewStory() {
     })
   );
 
-  const { startUpload } = useUploadThing("audioUploader", {
-    onClientUploadComplete: (res) => {
-      const { current } = stateRef;
-      const uploadedUrl = res[0]?.ufsUrl;
-      if (!uploadedUrl || !("prompt" in current)) {
-        logError("uploadthing.client.complete.missing-data", {
-          hasPrompt: "prompt" in current,
-          response: res,
-          uploadedUrl,
-        });
-        return;
-      }
-      logInfo("uploadthing.client.complete", {
-        prompt: current.prompt,
-        uploadedUrl,
-      });
-      dispatch({ type: "upload-complete" });
-      createStory.mutate({ audioUrl: uploadedUrl, prompt: current.prompt });
-    },
-    onUploadError: (error) => {
-      logError("uploadthing.client.error", {
-        error,
-        stage: stateRef.current.stage,
-      });
-      dispatch({ type: "failed", message: error.message });
-    },
-  });
-
   const selectPrompt = useCallback((prompt: string) => {
     dispatch({ type: "prompt-selected", prompt });
   }, []);
 
   const finishRecording = useCallback(
-    (recording: Blob) => {
+    async (recording: Blob) => {
+      const { current } = stateRef;
+      if (!("prompt" in current)) {
+        return;
+      }
+
       logInfo("recording.finish", {
         size: recording.size,
         type: recording.type,
       });
       dispatch({ type: "recording-finished" });
-      const file = new File([recording], "story-recording.webm", {
-        type: recording.type || "audio/webm",
-      });
-      startUpload([file]);
+
+      try {
+        const audioKey = await uploadAudio(recording);
+        logInfo("upload.complete", { audioKey });
+        dispatch({ type: "upload-complete" });
+        createStory.mutate({ audioKey, prompt: current.prompt });
+      } catch (error: unknown) {
+        logError("upload.error", { error });
+        dispatch({
+          type: "failed",
+          message: error instanceof Error ? error.message : "Upload failed",
+        });
+      }
     },
-    [startUpload]
+    [createStory]
   );
 
   const reset = useCallback(() => {
