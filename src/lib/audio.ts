@@ -69,7 +69,7 @@ export const fetchAudioFileFromUrl = async (
     });
 
     return ok(
-      new File([audioBuffer], `story-recording.${extension}`, {
+      new File([audioBuffer], `recording.${extension}`, {
         type: mimeType,
       })
     );

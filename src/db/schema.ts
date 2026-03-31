@@ -21,15 +21,23 @@ export const languageItemType = pgEnum("language_item_type", [
   "grammar_rule",
 ]);
 
-export const story = pgTable("story", {
+export const recording = pgTable("recording", {
   ...timestamps,
   id: uuid("id").defaultRandom().primaryKey(),
   audioUrl: text("audio_url").notNull(), // link to blob
   prompt: text("prompt").notNull(),
   transcript: text("transcript"),
   timestamps: json("timestamps"), // from transcription api
+  seriesId: uuid("series_id").references(() => series.id), // optional grouping
 });
-export type Story = typeof story.$inferSelect;
+export type Recording = typeof recording.$inferSelect;
+
+export const series = pgTable("series", {
+  ...timestamps,
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+});
+export type Series = typeof series.$inferSelect;
 
 export const languageItem = pgTable("language_item", {
   ...timestamps,
@@ -55,6 +63,6 @@ export const errorInstance = pgTable("error_instance", {
 
   storyId: uuid("story_id")
     .notNull()
-    .references(() => story.id),
+    .references(() => recording.id),
 });
 export type ErrorInstance = typeof errorInstance.$inferSelect;

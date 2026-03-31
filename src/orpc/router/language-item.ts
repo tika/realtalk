@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as z from "zod";
 
 import { db } from "#/db";
-import { errorInstance, languageItem, story } from "#/db/schema";
+import { errorInstance, languageItem, recording } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
 
 // get all language items for an error instance
@@ -19,24 +19,24 @@ export const getLanguageItemsForErrorInstance = os
         languageItem,
         eq(errorInstance.languageItemId, languageItem.id)
       )
-      .innerJoin(story, eq(errorInstance.storyId, story.id))
+      .innerJoin(recording, eq(errorInstance.storyId, recording.id))
       .where(
         and(
           eq(errorInstance.id, input.errorInstanceId),
           notDeleted(errorInstance),
           notDeleted(languageItem),
-          notDeleted(story)
+          notDeleted(recording)
         )
       );
 
     return rows.map(({ item }) => item);
   });
 
-// get all language items for a story id
-// input: story id
-// output: array of language items for that story
-export const getLanguageItemsForStory = os
-  .input(z.object({ storyId: z.uuid() }))
+// get all language items for a recording id
+// input: recording id
+// output: array of language items for that recording
+export const getLanguageItemsForRecording = os
+  .input(z.object({ recordingId: z.uuid() }))
   .handler(async ({ input }) => {
     const rows = await db
       .selectDistinct({ item: languageItem })
@@ -45,13 +45,13 @@ export const getLanguageItemsForStory = os
         languageItem,
         eq(errorInstance.languageItemId, languageItem.id)
       )
-      .innerJoin(story, eq(errorInstance.storyId, story.id))
+      .innerJoin(recording, eq(errorInstance.storyId, recording.id))
       .where(
         and(
-          eq(errorInstance.storyId, input.storyId),
+          eq(errorInstance.storyId, input.recordingId),
           notDeleted(errorInstance),
           notDeleted(languageItem),
-          notDeleted(story)
+          notDeleted(recording)
         )
       );
 

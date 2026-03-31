@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "#/db";
-import { errorInstance, story } from "#/db/schema";
+import { errorInstance, recording } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
 
 // given an error id, return the error instance
@@ -18,22 +18,22 @@ export const getErrorInstance = os
       await db
         .select({ item: errorInstance })
         .from(errorInstance)
-        .innerJoin(story, eq(errorInstance.storyId, story.id))
+        .innerJoin(recording, eq(errorInstance.storyId, recording.id))
         .where(
           and(
             eq(errorInstance.id, input.id),
             notDeleted(errorInstance),
-            notDeleted(story)
+            notDeleted(recording)
           )
         )
         .then((rows) => rows.map(({ item }) => item))
   );
 
-// get all error instances for a given story id
-export const getErrorInstancesForStory = os
+// get all error instances for a given recording id
+export const getErrorInstancesForRecording = os
   .input(
     z.object({
-      storyId: z.uuid(),
+      recordingId: z.uuid(),
     })
   )
   .handler(
@@ -41,12 +41,12 @@ export const getErrorInstancesForStory = os
       await db
         .select({ item: errorInstance })
         .from(errorInstance)
-        .innerJoin(story, eq(errorInstance.storyId, story.id))
+        .innerJoin(recording, eq(errorInstance.storyId, recording.id))
         .where(
           and(
-            eq(errorInstance.storyId, input.storyId),
+            eq(errorInstance.storyId, input.recordingId),
             notDeleted(errorInstance),
-            notDeleted(story)
+            notDeleted(recording)
           )
         )
         .then((rows) => rows.map(({ item }) => item))

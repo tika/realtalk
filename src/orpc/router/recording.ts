@@ -4,7 +4,7 @@ import { match } from "ts-pattern";
 import * as z from "zod";
 
 import { db } from "#/db";
-import { errorInstance, languageItem, story } from "#/db/schema";
+import { errorInstance, languageItem, recording } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
 import { analyzeTranscript, transcribeAudioFromUrl } from "#/lib/ai";
 import { logError, logInfo } from "#/lib/observability";
@@ -21,34 +21,34 @@ interface ResolvedTranscriptAnalysisError extends TranscriptAnalysisError {
   startTimeMs: number;
 }
 
-interface StoryAnalysisPayload {
+interface RecordingAnalysisPayload {
   errors: ResolvedTranscriptAnalysisError[];
   transcript: string;
   timestamps: z.infer<typeof transcriptWordSchema>[];
 }
 
-const getStoryAnalysisPayload = async (
+const getRecordingAnalysisPayload = async (
   audioUrl: string
-): Promise<StoryAnalysisPayload> => {
-  logInfo("story-analysis.start", {
+): Promise<RecordingAnalysisPayload> => {
+  logInfo("recording-analysis.start", {
     audioUrl,
   });
   const transcriptionResult = await transcribeAudioFromUrl(audioUrl);
   const transcription = match(transcriptionResult)
     .with({ success: true }, ({ data }) => data)
     .with({ success: false }, ({ error }) => {
-      logError("story-analysis.transcription-failed", {
+      logError("recording-analysis.transcription-failed", {
         audioUrl,
         error,
       });
-      throw new Error(`Story transcription failed: ${error.message}`);
+      throw new Error(`Recording transcription failed: ${error.message}`);
     })
     .exhaustive();
 
   const transcript = transcription.text;
   const timestamps = z.array(transcriptWordSchema).parse(transcription.words);
   const numberedTranscript = buildNumberedTranscript(timestamps);
-  logInfo("story-analysis.transcription-ready", {
+  logInfo("recording-analysis.transcription-ready", {
     audioUrl,
     transcriptLength: transcript.length,
     wordCount: timestamps.length,
@@ -59,11 +59,11 @@ const getStoryAnalysisPayload = async (
   const transcriptAnalysis = match(transcriptAnalysisResult)
     .with({ success: true }, ({ data }) => data)
     .with({ success: false }, ({ error }) => {
-      logError("story-analysis.model-failed", {
+      logError("recording-analysis.model-failed", {
         audioUrl,
         error,
       });
-      throw new Error(`Story analysis failed: ${error.message}`);
+      throw new Error(`Recording analysis failed: ${error.message}`);
     })
     .exhaustive();
   const resolvedErrors = transcriptAnalysis.errors.map((analysisError) => {
@@ -80,7 +80,7 @@ const getStoryAnalysisPayload = async (
     };
   });
 
-  logInfo("story-analysis.success", {
+  logInfo("recording-analysis.success", {
     audioUrl,
     errorCount: resolvedErrors.length,
   });
@@ -92,28 +92,30 @@ const getStoryAnalysisPayload = async (
   };
 };
 
-const replaceStoryAnalysis = async (
-  storyId: string,
-  analysis: StoryAnalysisPayload
+const replaceRecordingAnalysis = async (
+  recordingId: string,
+  analysis: RecordingAnalysisPayload
 ) => {
-  const existingStoryErrors = await db
+  const existingRecordingErrors = await db
     .select({
       id: errorInstance.id,
       languageItemId: errorInstance.languageItemId,
     })
     .from(errorInstance)
-    .where(and(eq(errorInstance.storyId, storyId), notDeleted(errorInstance)));
+    .where(
+      and(eq(errorInstance.storyId, recordingId), notDeleted(errorInstance))
+    );
 
-  const languageItemIds = existingStoryErrors.flatMap(({ languageItemId }) =>
-    languageItemId ? [languageItemId] : []
+  const languageItemIds = existingRecordingErrors.flatMap(
+    ({ languageItemId }) => (languageItemId ? [languageItemId] : [])
   );
 
   return await db.transaction(async (tx) => {
-    if (existingStoryErrors.length > 0) {
+    if (existingRecordingErrors.length > 0) {
       await tx.delete(errorInstance).where(
         inArray(
           errorInstance.id,
-          existingStoryErrors.map(({ id }) => id)
+          existingRecordingErrors.map(({ id }) => id)
         )
       );
     }
@@ -141,18 +143,18 @@ const replaceStoryAnalysis = async (
       }
     }
 
-    const [updatedStory] = await tx
-      .update(story)
+    const [updatedRecording] = await tx
+      .update(recording)
       .set({
         timestamps: analysis.timestamps,
         transcript: analysis.transcript,
         updatedAt: new Date(),
       })
-      .where(eq(story.id, storyId))
+      .where(eq(recording.id, recordingId))
       .returning();
 
-    if (!updatedStory) {
-      throw new Error("Story not found");
+    if (!updatedRecording) {
+      throw new Error("Recording not found");
     }
 
     for (const analysisError of analysis.errors) {
@@ -175,131 +177,138 @@ const replaceStoryAnalysis = async (
         rating: analysisError.rating,
         original_text: analysisError.original_text,
         startTimeMs: analysisError.startTimeMs,
-        storyId,
+        storyId: recordingId,
       });
     }
 
-    return updatedStory;
+    return updatedRecording;
   });
 };
 
-// return a list of all stories
+// return a list of all recordings
 // input: nothing
-// output: array of story objects straight from db
-export const getAllStories = os
+// output: array of recording objects straight from db
+export const getAllRecordings = os
   .input(z.object({}))
-  .handler(async () => await db.select().from(story).where(notDeleted(story)));
+  .handler(
+    async () => await db.select().from(recording).where(notDeleted(recording))
+  );
 
-// return a single story by id
-// input: story id
-// output: story object from db
-export const getStory = os.input(z.object({ id: z.uuid() })).handler(
+// return a single recording by id
+// input: recording id
+// output: recording object from db
+export const getRecording = os.input(z.object({ id: z.uuid() })).handler(
   async ({ input }) =>
     await db
       .select()
-      .from(story)
-      .where(and(eq(story.id, input.id), notDeleted(story)))
+      .from(recording)
+      .where(and(eq(recording.id, input.id), notDeleted(recording)))
       .limit(1)
       .then((rows) => rows[0])
 );
 
-// create a new story after you've recorded
+// create a new recording after you've recorded
 // input: audio blob url, selected prompt
-// output: story object from db -> doesn't really matter
-// processing: create story object, then start transcription using whisper-1, then update story object
-// processing: analysing a story - run through the transcript, find the linguistic errors and create records in the db
+// output: recording object from db -> doesn't really matter
+// processing: create recording object, then start transcription using whisper-1, then update recording object
+// processing: analysing a recording - run through the transcript, find the linguistic errors and create records in the db
 // ** hesitations come from looking at the timestamps and finding gaps greater than a threshold
 // ** Claude Sonnet will:
 //    -  look through the transcript and flag native-language text, convert this to the target language (as "blank" error)
 //    -  look for grammatical and lexical mistakes, create corrections
-export const createStory = os
+export const createRecording = os
   .input(
     z.object({
       audioUrl: z.url(),
       prompt: z.string().min(1),
+      seriesId: z.uuid().optional(),
     })
   )
   .handler(async ({ input }) => {
-    logInfo("story.create.start", {
+    logInfo("recording.create.start", {
       audioUrl: input.audioUrl,
       prompt: input.prompt,
+      seriesId: input.seriesId,
     });
-    const [createdStory] = await db
-      .insert(story)
+    const [createdRecording] = await db
+      .insert(recording)
       .values({
         audioUrl: input.audioUrl,
         prompt: input.prompt,
+        seriesId: input.seriesId,
       })
       .returning();
-    const analysis = await getStoryAnalysisPayload(input.audioUrl);
+    const analysis = await getRecordingAnalysisPayload(input.audioUrl);
 
-    logInfo("story.create.analysis-ready", {
+    logInfo("recording.create.analysis-ready", {
       errorCount: analysis.errors.length,
-      storyId: createdStory.id,
+      recordingId: createdRecording.id,
     });
-    return await replaceStoryAnalysis(createdStory.id, analysis);
+    return await replaceRecordingAnalysis(createdRecording.id, analysis);
   });
 
-export const reanalyseStory = os
+export const reanalyseRecording = os
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input }) => {
-    logInfo("story.reanalyse.start", {
-      storyId: input.id,
+    logInfo("recording.reanalyse.start", {
+      recordingId: input.id,
     });
-    const [existingStory] = await db
+    const [existingRecording] = await db
       .select({
-        audioUrl: story.audioUrl,
+        audioUrl: recording.audioUrl,
       })
-      .from(story)
-      .where(and(eq(story.id, input.id), notDeleted(story)))
+      .from(recording)
+      .where(and(eq(recording.id, input.id), notDeleted(recording)))
       .limit(1);
 
-    if (!existingStory) {
-      throw new Error("Story not found");
+    if (!existingRecording) {
+      throw new Error("Recording not found");
     }
 
-    const analysis = await getStoryAnalysisPayload(existingStory.audioUrl);
+    const analysis = await getRecordingAnalysisPayload(
+      existingRecording.audioUrl
+    );
 
-    logInfo("story.reanalyse.analysis-ready", {
+    logInfo("recording.reanalyse.analysis-ready", {
       errorCount: analysis.errors.length,
-      storyId: input.id,
+      recordingId: input.id,
     });
-    return await replaceStoryAnalysis(input.id, analysis);
+    return await replaceRecordingAnalysis(input.id, analysis);
   });
 
-// delete a story by id
-// input: story id
+// delete a recording by id
+// input: recording id
 // output: success message
-export const deleteStory = os
+export const deleteRecording = os
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input }) => {
     const deletedAt = new Date();
-    const storyErrors = await db
+    const recordingErrors = await db
       .select({
         languageItemId: errorInstance.languageItemId,
       })
       .from(errorInstance)
-      .innerJoin(story, eq(errorInstance.storyId, story.id))
+      .innerJoin(recording, eq(errorInstance.storyId, recording.id))
       .where(
         and(
           eq(errorInstance.storyId, input.id),
           notDeleted(errorInstance),
-          notDeleted(story)
+          notDeleted(recording)
         )
       );
 
-    const languageItemIds = storyErrors.flatMap(({ languageItemId }) =>
+    const languageItemIds = recordingErrors.flatMap(({ languageItemId }) =>
       languageItemId ? [languageItemId] : []
     );
 
     await db.transaction(async (tx) => {
-      const [deletedStory] = await tx
-        .update(story)
+      const [deletedRecording] = await tx
+        .update(recording)
         .set({ deletedAt, updatedAt: deletedAt })
-        .where(and(eq(story.id, input.id), notDeleted(story)))
-        .returning({ id: story.id });
+        .where(and(eq(recording.id, input.id), notDeleted(recording)))
+        .returning({ id: recording.id });
 
-      if (!deletedStory) {
+      if (!deletedRecording) {
         return;
       }
 
@@ -314,12 +323,12 @@ export const deleteStory = os
         const activeReferences = await tx
           .selectDistinct({ languageItemId: errorInstance.languageItemId })
           .from(errorInstance)
-          .innerJoin(story, eq(errorInstance.storyId, story.id))
+          .innerJoin(recording, eq(errorInstance.storyId, recording.id))
           .where(
             and(
               inArray(errorInstance.languageItemId, languageItemIds),
               notDeleted(errorInstance),
-              notDeleted(story),
+              notDeleted(recording),
               ne(errorInstance.storyId, input.id)
             )
           );
