@@ -1,4 +1,7 @@
-import { MoreVerticalCircle01Icon } from "@hugeicons/core-free-icons";
+import {
+  MoreVerticalCircle01Icon,
+  RepeatIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -16,12 +19,13 @@ import {
 
 interface StoryActionsProps {
   storyId: string;
+  seriesId?: string | null;
 }
 
 export const getReanalyseStoryMutationKey = (storyId: string) =>
   ["recording", "reanalyse", storyId] as const;
 
-export const StoryActions = ({ storyId }: StoryActionsProps) => {
+export const StoryActions = ({ storyId, seriesId }: StoryActionsProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const invalidateRecordingQueries = async () => {
@@ -57,6 +61,13 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
       },
     })
   );
+  const convertToSeries = useMutation(
+    orpc.series.convertToSeries.mutationOptions({
+      onSuccess: async (series) => {
+        await navigate({ to: "/story/new", search: { seriesId: series.id } });
+      },
+    })
+  );
 
   const handleReanalyse = () => {
     reanalyseRecording.mutate({ id: storyId });
@@ -65,6 +76,15 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
   const handleDelete = () => {
     deleteRecording.mutate({ id: storyId });
   };
+
+  const handleReinforce = () => {
+    convertToSeries.mutate({ recordingId: storyId });
+  };
+
+  const isBusy =
+    reanalyseRecording.isPending ||
+    deleteRecording.isPending ||
+    convertToSeries.isPending;
 
   return (
     <DropdownMenu>
@@ -77,16 +97,16 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            disabled={reanalyseRecording.isPending || deleteRecording.isPending}
-            onClick={handleReanalyse}
-          >
+          {!seriesId && (
+            <DropdownMenuItem disabled={isBusy} onClick={handleReinforce}>
+              <HugeiconsIcon icon={RepeatIcon} className="mr-2 h-4 w-4" />
+              {convertToSeries.isPending ? "Starting..." : "Reinforce"}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem disabled={isBusy} onClick={handleReanalyse}>
             {reanalyseRecording.isPending ? "Re-analysing..." : "Re-analyse"}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={reanalyseRecording.isPending || deleteRecording.isPending}
-            onClick={handleDelete}
-          >
+          <DropdownMenuItem disabled={isBusy} onClick={handleDelete}>
             Delete
           </DropdownMenuItem>
         </DropdownMenuGroup>

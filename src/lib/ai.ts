@@ -16,7 +16,7 @@ import { sttPrompt, targetLang } from "./consts";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TRANSCRIPTION_MODEL = "whisper-1";
-const ANALYSIS_MODEL = "anthropic/claude-3.5-sonnet";
+const ANALYSIS_MODEL = "openai/gpt-5";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_KEY });
 const openrouter = new OpenAI({

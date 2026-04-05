@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useReducer, useRef, useState } from "react";
+import * as z from "zod";
 
 import { NewStoryDialog } from "#/components/new-story-dialog";
 import { RecordStory } from "#/components/record-story";
@@ -8,8 +9,24 @@ import { Button } from "#/components/ui/button";
 import { logError, logInfo } from "#/lib/observability";
 import { orpc } from "#/orpc/client";
 
+const searchSchema = z.object({
+  mode: z.enum(["single", "reinforce"]).optional(),
+  seriesId: z.string().uuid().optional(),
+});
+
 export const Route = createFileRoute("/story/new")({
   component: NewStory,
+  validateSearch: searchSchema,
+  loaderDeps: ({ search }) => ({ seriesId: search.seriesId }),
+  loader: async ({ context, deps }) => {
+    if (!deps.seriesId) {
+      return { series: null };
+    }
+    const series = await context.queryClient.fetchQuery(
+      orpc.series.getSeries.queryOptions({ input: { id: deps.seriesId } })
+    );
+    return { series };
+  },
 });
 
 const prompts = [
@@ -35,10 +52,16 @@ type Mode = "single" | "reinforce";
 type State =
   | { stage: "mode-selection" }
   | { stage: "prompt-selection"; mode: Mode }
-  | { stage: "recording-story"; mode: Mode; prompt: string }
-  | { stage: "uploading"; mode: Mode; prompt: string }
-  | { stage: "analysing"; mode: Mode; prompt: string }
-  | { stage: "error"; mode: Mode; prompt: string; message: string };
+  | { stage: "recording-story"; mode: Mode; prompt: string; seriesId?: string }
+  | { stage: "uploading"; mode: Mode; prompt: string; seriesId?: string }
+  | { stage: "analysing"; mode: Mode; prompt: string; seriesId?: string }
+  | {
+      stage: "error";
+      mode: Mode;
+      prompt: string;
+      seriesId?: string;
+      message: string;
+    };
 
 type Action =
   | { type: "mode-selected"; mode: Mode }
@@ -47,6 +70,27 @@ type Action =
   | { type: "upload-complete" }
   | { type: "failed"; message: string }
   | { type: "reset" };
+
+interface InitParams {
+  mode?: Mode;
+  seriesId?: string;
+  prompt?: string;
+}
+
+const getInitialState = (params: InitParams): State => {
+  if (params.seriesId && params.prompt) {
+    return {
+      stage: "recording-story",
+      mode: "reinforce",
+      prompt: params.prompt,
+      seriesId: params.seriesId,
+    };
+  }
+  if (params.mode) {
+    return { stage: "prompt-selection", mode: params.mode };
+  }
+  return { stage: "mode-selection" };
+};
 
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
@@ -67,13 +111,23 @@ const reducer = (state: State, action: Action): State => {
       if (state.stage !== "recording-story") {
         return state;
       }
-      return { stage: "uploading", mode: state.mode, prompt: state.prompt };
+      return {
+        stage: "uploading",
+        mode: state.mode,
+        prompt: state.prompt,
+        seriesId: state.seriesId,
+      };
     }
     case "upload-complete": {
       if (state.stage !== "uploading") {
         return state;
       }
-      return { stage: "analysing", mode: state.mode, prompt: state.prompt };
+      return {
+        stage: "analysing",
+        mode: state.mode,
+        prompt: state.prompt,
+        seriesId: state.seriesId,
+      };
     }
     case "failed": {
       if (!("prompt" in state)) {
@@ -83,6 +137,7 @@ const reducer = (state: State, action: Action): State => {
         stage: "error",
         mode: state.mode,
         prompt: state.prompt,
+        seriesId: "seriesId" in state ? state.seriesId : undefined,
         message: action.message,
       };
     }
@@ -113,7 +168,14 @@ const uploadAudio = async (blob: Blob): Promise<string> => {
 };
 
 function NewStory() {
-  const [state, dispatch] = useReducer(reducer, { stage: "mode-selection" });
+  const { mode, seriesId } = Route.useSearch();
+  const { series } = Route.useLoaderData();
+
+  const [state, dispatch] = useReducer(
+    reducer,
+    { mode, seriesId, prompt: series?.title },
+    getInitialState
+  );
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -152,8 +214,8 @@ function NewStory() {
     })
   );
 
-  const handleModeSelected = (mode: Mode) => {
-    dispatch({ type: "mode-selected", mode });
+  const handleModeSelected = (modeSelected: Mode) => {
+    dispatch({ type: "mode-selected", mode: modeSelected });
   };
 
   const selectPrompt = (prompt: string) => {
@@ -178,14 +240,25 @@ function NewStory() {
       dispatch({ type: "upload-complete" });
 
       if (current.mode === "reinforce") {
-        const series = await createSeries.mutateAsync({
-          title: `Story: ${current.prompt}`,
-        });
-        createRecording.mutate({
-          audioKey,
-          prompt: current.prompt,
-          seriesId: series.id,
-        });
+        const existingSeriesId =
+          "seriesId" in current ? current.seriesId : undefined;
+
+        if (existingSeriesId) {
+          createRecording.mutate({
+            audioKey,
+            prompt: current.prompt,
+            seriesId: existingSeriesId,
+          });
+        } else {
+          const newSeries = await createSeries.mutateAsync({
+            title: current.prompt,
+          });
+          createRecording.mutate({
+            audioKey,
+            prompt: current.prompt,
+            seriesId: newSeries.id,
+          });
+        }
       } else {
         createRecording.mutate({ audioKey, prompt: current.prompt });
       }
