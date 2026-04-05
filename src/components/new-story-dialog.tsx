@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { Button } from "#/components/ui/button";
 import {
   Dialog,
@@ -20,15 +18,15 @@ export const NewStoryDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
-  const handleSingleClick = useCallback(() => {
+  const handleSingleClick = () => {
     onSelect("single");
     onOpenChange(false);
-  }, [onSelect, onOpenChange]);
+  };
 
-  const handleReinforceClick = useCallback(() => {
+  const handleReinforceClick = () => {
     onSelect("reinforce");
     onOpenChange(false);
-  }, [onSelect, onOpenChange]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

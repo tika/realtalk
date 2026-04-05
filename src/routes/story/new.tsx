@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useReducer, useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 
 import { NewStoryDialog } from "#/components/new-story-dialog";
 import { RecordStory } from "#/components/record-story";
@@ -24,17 +24,11 @@ const PromptButton = ({
 }: {
   onSelect: (prompt: string) => void;
   prompt: string;
-}) => {
-  const handleClick = useCallback(() => {
-    onSelect(prompt);
-  }, [onSelect, prompt]);
-
-  return (
-    <Button onClick={handleClick} type="button">
-      {prompt}
-    </Button>
-  );
-};
+}) => (
+  <Button onClick={() => onSelect(prompt)} type="button">
+    {prompt}
+  </Button>
+);
 
 type Mode = "single" | "reinforce";
 
@@ -158,62 +152,59 @@ function NewStory() {
     })
   );
 
-  const handleModeSelected = useCallback((mode: Mode) => {
+  const handleModeSelected = (mode: Mode) => {
     dispatch({ type: "mode-selected", mode });
-  }, []);
+  };
 
-  const selectPrompt = useCallback((prompt: string) => {
+  const selectPrompt = (prompt: string) => {
     dispatch({ type: "prompt-selected", prompt });
-  }, []);
+  };
 
-  const finishRecording = useCallback(
-    async (blob: Blob) => {
-      const { current } = stateRef;
-      if (!("prompt" in current)) {
-        return;
-      }
+  const finishRecording = async (blob: Blob) => {
+    const { current } = stateRef;
+    if (!("prompt" in current)) {
+      return;
+    }
 
-      logInfo("recording.finish", {
-        size: blob.size,
-        type: blob.type,
-      });
-      dispatch({ type: "recording-finished" });
+    logInfo("recording.finish", {
+      size: blob.size,
+      type: blob.type,
+    });
+    dispatch({ type: "recording-finished" });
 
-      try {
-        const audioKey = await uploadAudio(blob);
-        logInfo("upload.complete", { audioKey });
-        dispatch({ type: "upload-complete" });
+    try {
+      const audioKey = await uploadAudio(blob);
+      logInfo("upload.complete", { audioKey });
+      dispatch({ type: "upload-complete" });
 
-        if (current.mode === "reinforce") {
-          const series = await createSeries.mutateAsync({
-            title: `Story: ${current.prompt}`,
-          });
-          createRecording.mutate({
-            audioKey,
-            prompt: current.prompt,
-            seriesId: series.id,
-          });
-        } else {
-          createRecording.mutate({ audioKey, prompt: current.prompt });
-        }
-      } catch (error: unknown) {
-        logError("upload.error", { error });
-        dispatch({
-          type: "failed",
-          message: error instanceof Error ? error.message : "Upload failed",
+      if (current.mode === "reinforce") {
+        const series = await createSeries.mutateAsync({
+          title: `Story: ${current.prompt}`,
         });
+        createRecording.mutate({
+          audioKey,
+          prompt: current.prompt,
+          seriesId: series.id,
+        });
+      } else {
+        createRecording.mutate({ audioKey, prompt: current.prompt });
       }
-    },
-    [createRecording, createSeries]
-  );
+    } catch (error: unknown) {
+      logError("upload.error", { error });
+      dispatch({
+        type: "failed",
+        message: error instanceof Error ? error.message : "Upload failed",
+      });
+    }
+  };
 
-  const reset = useCallback(() => {
+  const reset = () => {
     dispatch({ type: "reset" });
-  }, []);
+  };
 
-  const openDialog = useCallback(() => {
+  const openDialog = () => {
     setDialogOpen(true);
-  }, []);
+  };
 
   return (
     <main>

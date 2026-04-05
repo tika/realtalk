@@ -13,6 +13,7 @@
     "func-style": "off",
     "no-warning-comments": "off",
     "unicorn/filename-case": "off",
-    "react/no-unescaped-entities": "off"
+    "react/no-unescaped-entities": "off",
+    "react-perf/jsx-no-new-function-as-prop": "off"
   }
 }

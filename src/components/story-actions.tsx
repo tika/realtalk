@@ -2,7 +2,6 @@ import { MoreVerticalCircle01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
 
 import { orpc } from "#/orpc/client";
 import {
@@ -25,7 +24,7 @@ export const getReanalyseStoryMutationKey = (storyId: string) =>
 export const StoryActions = ({ storyId }: StoryActionsProps) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const invalidateRecordingQueries = useCallback(async () => {
+  const invalidateRecordingQueries = async () => {
     await queryClient.invalidateQueries({
       queryKey: orpc.recording.getAllRecordings.queryOptions({ input: {} })
         .queryKey,
@@ -40,7 +39,7 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
         input: { recordingId: storyId },
       }).queryKey,
     });
-  }, [queryClient, storyId]);
+  };
 
   const reanalyseRecording = useMutation(
     orpc.recording.reanalyseRecording.mutationOptions({
@@ -59,13 +58,13 @@ export const StoryActions = ({ storyId }: StoryActionsProps) => {
     })
   );
 
-  const handleReanalyse = useCallback(() => {
+  const handleReanalyse = () => {
     reanalyseRecording.mutate({ id: storyId });
-  }, [reanalyseRecording, storyId]);
+  };
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = () => {
     deleteRecording.mutate({ id: storyId });
-  }, [deleteRecording, storyId]);
+  };
 
   return (
     <DropdownMenu>
