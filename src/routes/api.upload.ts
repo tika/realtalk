@@ -1,3 +1,4 @@
+import { auth } from "@clerk/tanstack-react-start/server";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getAudioExtensionFromMimeType } from "#/lib/audio";
@@ -9,6 +10,11 @@ const MAX_FILE_SIZE = 32 * 1024 * 1024; // 32MB
 const handle = async ({ request }: { request: Request }) => {
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
+  }
+
+  const { userId } = await auth();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const contentType = request.headers.get("content-type") ?? "audio/webm";
@@ -26,8 +32,8 @@ const handle = async ({ request }: { request: Request }) => {
   const extension = getAudioExtensionFromMimeType(contentType);
 
   const key = seriesId
-    ? `recordings/${seriesId}/${recordingId}.${extension}`
-    : `recordings/${recordingId}.${extension}`;
+    ? `recordings/${userId}/${seriesId}/${recordingId}.${extension}`
+    : `recordings/${userId}/${recordingId}.${extension}`;
 
   try {
     const buffer = Buffer.from(await request.arrayBuffer());

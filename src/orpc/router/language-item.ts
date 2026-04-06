@@ -1,17 +1,17 @@
-import { os } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import * as z from "zod";
 
 import { db } from "#/db";
 import { errorInstance, languageItem, recording } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
+import { authedProcedure } from "#/orpc/procedures";
 
 // get all language items for an error instance
 // input: error instance id
 // output: array of language items for that error instance
-export const getLanguageItemsForErrorInstance = os
+export const getLanguageItemsForErrorInstance = authedProcedure
   .input(z.object({ errorInstanceId: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const rows = await db
       .select({ item: languageItem })
       .from(errorInstance)
@@ -23,6 +23,7 @@ export const getLanguageItemsForErrorInstance = os
       .where(
         and(
           eq(errorInstance.id, input.errorInstanceId),
+          eq(recording.userId, context.userId),
           notDeleted(errorInstance),
           notDeleted(languageItem),
           notDeleted(recording)
@@ -35,9 +36,9 @@ export const getLanguageItemsForErrorInstance = os
 // get all language items for a recording id
 // input: recording id
 // output: array of language items for that recording
-export const getLanguageItemsForRecording = os
+export const getLanguageItemsForRecording = authedProcedure
   .input(z.object({ recordingId: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const rows = await db
       .selectDistinct({ item: languageItem })
       .from(errorInstance)
@@ -49,6 +50,7 @@ export const getLanguageItemsForRecording = os
       .where(
         and(
           eq(errorInstance.storyId, input.recordingId),
+          eq(recording.userId, context.userId),
           notDeleted(errorInstance),
           notDeleted(languageItem),
           notDeleted(recording)
@@ -61,9 +63,12 @@ export const getLanguageItemsForRecording = os
 // return all language items
 // input: nothing
 // output: array of language items
-export const getAllLanguageItems = os
-  .input(z.object({}))
-  .handler(
-    async () =>
-      await db.select().from(languageItem).where(notDeleted(languageItem))
-  );
+export const getAllLanguageItems = authedProcedure.input(z.object({})).handler(
+  async ({ context }) =>
+    await db
+      .select()
+      .from(languageItem)
+      .where(
+        and(eq(languageItem.userId, context.userId), notDeleted(languageItem))
+      )
+);

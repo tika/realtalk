@@ -5,7 +5,7 @@ import { routeTree } from "./routeTree.gen";
 
 export const getRouter = () => {
   const router = createTanStackRouter({
-    context: getContext(),
+    context: { ...getContext(), userId: null },
 
     defaultPreload: "intent",
 

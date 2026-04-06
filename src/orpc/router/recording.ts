@@ -1,4 +1,3 @@
-import { os } from "@orpc/server";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { match } from "ts-pattern";
 import * as z from "zod";
@@ -16,6 +15,7 @@ import {
   transcriptWordSchema,
 } from "#/lib/transcript";
 import type { TranscriptAnalysisError } from "#/lib/transcript-analysis";
+import { authedProcedure } from "#/orpc/procedures";
 
 interface ResolvedTranscriptAnalysisError extends TranscriptAnalysisError {
   endTimeMs: number;
@@ -107,7 +107,8 @@ const getRecordingAnalysisPayload = async (
 
 const replaceRecordingAnalysis = async (
   recordingId: string,
-  analysis: RecordingAnalysisPayload
+  analysis: RecordingAnalysisPayload,
+  userId: string
 ) => {
   const existingRecordingErrors = await db
     .select({
@@ -178,6 +179,7 @@ const replaceRecordingAnalysis = async (
           purpose: analysisError.language_item.purpose,
           targetText: analysisError.language_item.target_text,
           type: analysisError.language_item.type,
+          userId,
         })
         .returning();
 
@@ -208,21 +210,32 @@ const withResolvedAudioUrl = async <T extends { audioKey: string }>(
   return { ...record, audioUrl };
 };
 
-export const getAllRecordings = os.input(z.object({})).handler(async () => {
-  const rows = await db.select().from(recording).where(notDeleted(recording));
-  return await Promise.all(rows.map(withResolvedAudioUrl));
-});
+export const getAllRecordings = authedProcedure
+  .input(z.object({}))
+  .handler(async ({ context }) => {
+    const rows = await db
+      .select()
+      .from(recording)
+      .where(and(eq(recording.userId, context.userId), notDeleted(recording)));
+    return await Promise.all(rows.map(withResolvedAudioUrl));
+  });
 
 // return a single recording by id
 // input: recording id
 // output: recording object from db
-export const getRecording = os
+export const getRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const row = await db
       .select()
       .from(recording)
-      .where(and(eq(recording.id, input.id), notDeleted(recording)))
+      .where(
+        and(
+          eq(recording.id, input.id),
+          eq(recording.userId, context.userId),
+          notDeleted(recording)
+        )
+      )
       .limit(1)
       .then((rows) => rows[0]);
 
@@ -242,7 +255,7 @@ export const getRecording = os
 // ** Claude Sonnet will:
 //    -  look through the transcript and flag native-language text, convert this to the target language (as "blank" error)
 //    -  look for grammatical and lexical mistakes, create corrections
-export const createRecording = os
+export const createRecording = authedProcedure
   .input(
     z.object({
       audioKey: z.string().min(1),
@@ -250,7 +263,7 @@ export const createRecording = os
       seriesId: z.uuid().optional(),
     })
   )
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     logInfo("recording.create.start", {
       audioKey: input.audioKey,
       prompt: input.prompt,
@@ -262,6 +275,7 @@ export const createRecording = os
         audioKey: input.audioKey,
         prompt: input.prompt,
         seriesId: input.seriesId,
+        userId: context.userId,
       })
       .returning();
     const analysis = await getRecordingAnalysisPayload(input.audioKey);
@@ -270,12 +284,16 @@ export const createRecording = os
       errorCount: analysis.errors.length,
       recordingId: createdRecording.id,
     });
-    return await replaceRecordingAnalysis(createdRecording.id, analysis);
+    return await replaceRecordingAnalysis(
+      createdRecording.id,
+      analysis,
+      context.userId
+    );
   });
 
-export const reanalyseRecording = os
+export const reanalyseRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     logInfo("recording.reanalyse.start", {
       recordingId: input.id,
     });
@@ -284,7 +302,13 @@ export const reanalyseRecording = os
         audioKey: recording.audioKey,
       })
       .from(recording)
-      .where(and(eq(recording.id, input.id), notDeleted(recording)))
+      .where(
+        and(
+          eq(recording.id, input.id),
+          eq(recording.userId, context.userId),
+          notDeleted(recording)
+        )
+      )
       .limit(1);
 
     if (!existingRecording) {
@@ -299,15 +323,15 @@ export const reanalyseRecording = os
       errorCount: analysis.errors.length,
       recordingId: input.id,
     });
-    return await replaceRecordingAnalysis(input.id, analysis);
+    return await replaceRecordingAnalysis(input.id, analysis, context.userId);
   });
 
 // delete a recording by id
 // input: recording id
 // output: success message
-export const deleteRecording = os
+export const deleteRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const deletedAt = new Date();
     const recordingErrors = await db
       .select({
@@ -318,6 +342,7 @@ export const deleteRecording = os
       .where(
         and(
           eq(errorInstance.storyId, input.id),
+          eq(recording.userId, context.userId),
           notDeleted(errorInstance),
           notDeleted(recording)
         )
@@ -331,7 +356,13 @@ export const deleteRecording = os
       const [deletedRecording] = await tx
         .update(recording)
         .set({ deletedAt, updatedAt: deletedAt })
-        .where(and(eq(recording.id, input.id), notDeleted(recording)))
+        .where(
+          and(
+            eq(recording.id, input.id),
+            eq(recording.userId, context.userId),
+            notDeleted(recording)
+          )
+        )
         .returning({ id: recording.id });
 
       if (!deletedRecording) {

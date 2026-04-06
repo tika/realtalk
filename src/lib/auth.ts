@@ -1,0 +1,9 @@
+import { auth } from "@clerk/tanstack-react-start/server";
+import { createServerFn } from "@tanstack/react-start";
+
+export const getAuthState = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const { userId } = await auth();
+    return { userId };
+  }
+);

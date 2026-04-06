@@ -1,3 +1,9 @@
+import {
+  ClerkProvider,
+  Show,
+  SignInButton,
+  UserButton,
+} from "@clerk/tanstack-react-start";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -9,11 +15,13 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import TanStackQueryProvider from "../integrations/tanstack-query/root-provider";
+import { getAuthState } from "../lib/auth";
 
 import appCss from "../styles.css?url";
 
 interface MyRouterContext {
   queryClient: QueryClient;
+  userId: string | null;
 }
 
 /**/
@@ -24,7 +32,17 @@ const RootDocument = ({ children }: { children: React.ReactNode }) => (
     </head>
     <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[var(--primary)] selection:text-primary-foreground mx-16 my-12">
       <TanStackQueryProvider>
-        {children}
+        <ClerkProvider>
+          <header className="flex justify-end mb-4">
+            <Show when="signed-out">
+              <SignInButton mode="modal" />
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </header>
+          {children}
+        </ClerkProvider>
         <TanStackDevtools
           config={{
             position: "bottom-right",
@@ -45,6 +63,10 @@ const RootDocument = ({ children }: { children: React.ReactNode }) => (
 /**/
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+  beforeLoad: async () => {
+    const { userId } = await getAuthState();
+    return { userId };
+  },
   head: () => ({
     links: [
       {

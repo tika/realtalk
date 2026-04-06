@@ -1,3 +1,4 @@
+import { SignInButton } from "@clerk/tanstack-react-start";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -9,7 +10,21 @@ import { orpc } from "#/orpc/client";
 
 type Mode = "single" | "reinforce";
 
-const App = () => {
+const Landing = () => (
+  <main>
+    <h1 className="text-2xl font-bold">Realtalk</h1>
+    <p className="mt-2">
+      Practice speaking and get feedback on your language skills.
+    </p>
+    <div className="mt-4">
+      <SignInButton mode="modal">
+        <Button>Sign in to get started</Button>
+      </SignInButton>
+    </div>
+  </main>
+);
+
+const Dashboard = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -49,9 +64,20 @@ const App = () => {
   );
 };
 
+const App = () => {
+  const { userId } = Route.useRouteContext();
+  if (!userId) {
+    return <Landing />;
+  }
+  return <Dashboard />;
+};
+
 export const Route = createFileRoute("/")({
   component: App,
   loader: async ({ context }) => {
+    if (!context.userId) {
+      return;
+    }
     await context.queryClient.ensureQueryData(
       orpc.recording.getAllRecordings.queryOptions({ input: {} })
     );

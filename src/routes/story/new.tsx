@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import * as z from "zod";
 
@@ -17,6 +17,11 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/story/new")({
   component: NewStory,
   validateSearch: searchSchema,
+  beforeLoad: ({ context }) => {
+    if (!context.userId) {
+      throw redirect({ to: "/" });
+    }
+  },
   loaderDeps: ({ search }) => ({ seriesId: search.seriesId }),
   loader: async ({ context, deps }) => {
     if (!deps.seriesId) {

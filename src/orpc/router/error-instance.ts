@@ -1,20 +1,20 @@
-import { os } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "#/db";
 import { errorInstance, recording } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
+import { authedProcedure } from "#/orpc/procedures";
 
 // given an error id, return the error instance
-export const getErrorInstance = os
+export const getErrorInstance = authedProcedure
   .input(
     z.object({
       id: z.uuid(),
     })
   )
   .handler(
-    async ({ input }) =>
+    async ({ input, context }) =>
       await db
         .select({ item: errorInstance })
         .from(errorInstance)
@@ -22,6 +22,7 @@ export const getErrorInstance = os
         .where(
           and(
             eq(errorInstance.id, input.id),
+            eq(recording.userId, context.userId),
             notDeleted(errorInstance),
             notDeleted(recording)
           )
@@ -30,14 +31,14 @@ export const getErrorInstance = os
   );
 
 // get all error instances for a given recording id
-export const getErrorInstancesForRecording = os
+export const getErrorInstancesForRecording = authedProcedure
   .input(
     z.object({
       recordingId: z.uuid(),
     })
   )
   .handler(
-    async ({ input }) =>
+    async ({ input, context }) =>
       await db
         .select({ item: errorInstance })
         .from(errorInstance)
@@ -45,6 +46,7 @@ export const getErrorInstancesForRecording = os
         .where(
           and(
             eq(errorInstance.storyId, input.recordingId),
+            eq(recording.userId, context.userId),
             notDeleted(errorInstance),
             notDeleted(recording)
           )

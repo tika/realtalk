@@ -1,5 +1,5 @@
 import { useIsMutating, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { formatRelative } from "date-fns";
 
 import { AudioPlayback } from "#/components/audio-playback";
@@ -13,6 +13,11 @@ import { orpc } from "#/orpc/client";
 
 export const Route = createFileRoute("/story/$storyId")({
   component: StoryDetail,
+  beforeLoad: ({ context }) => {
+    if (!context.userId) {
+      throw redirect({ to: "/" });
+    }
+  },
   loader: async ({ context, params }) => {
     await Promise.all([
       context.queryClient.ensureQueryData(

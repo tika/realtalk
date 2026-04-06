@@ -26,9 +26,10 @@ export const recording = pgTable("recording", {
   id: uuid("id").defaultRandom().primaryKey(),
   audioKey: text("audio_key").notNull(), // S3 object key
   prompt: text("prompt").notNull(),
-  transcript: text("transcript"),
-  timestamps: json("timestamps"), // from transcription api
   seriesId: uuid("series_id").references(() => series.id), // optional grouping
+  timestamps: json("timestamps"), // from transcription api
+  transcript: text("transcript"),
+  userId: text("user_id").notNull(),
 });
 export type Recording = typeof recording.$inferSelect;
 
@@ -36,6 +37,7 @@ export const series = pgTable("series", {
   ...timestamps,
   id: uuid("id").defaultRandom().primaryKey(),
   title: text("title").notNull(),
+  userId: text("user_id").notNull(),
 });
 export type Series = typeof series.$inferSelect;
 
@@ -46,6 +48,7 @@ export const languageItem = pgTable("language_item", {
   purpose: text("purpose").notNull(),
   targetText: text("target_text").notNull(),
   type: languageItemType("type").notNull(),
+  userId: text("user_id").notNull(),
 });
 export type LanguageItem = typeof languageItem.$inferSelect;
 

@@ -1,44 +1,60 @@
-import { os } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import * as z from "zod";
 
 import { db } from "#/db";
 import { recording, series } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
+import { authedProcedure } from "#/orpc/procedures";
 
-export const getSeries = os.input(z.object({ id: z.uuid() })).handler(
-  async ({ input }) =>
+export const getSeries = authedProcedure
+  .input(z.object({ id: z.uuid() }))
+  .handler(
+    async ({ input, context }) =>
+      await db
+        .select()
+        .from(series)
+        .where(
+          and(
+            eq(series.id, input.id),
+            eq(series.userId, context.userId),
+            notDeleted(series)
+          )
+        )
+        .limit(1)
+        .then((rows) => rows[0])
+  );
+
+export const getAllSeries = authedProcedure.input(z.object({})).handler(
+  async ({ context }) =>
     await db
       .select()
       .from(series)
-      .where(and(eq(series.id, input.id), notDeleted(series)))
-      .limit(1)
-      .then((rows) => rows[0])
+      .where(and(eq(series.userId, context.userId), notDeleted(series)))
 );
 
-export const getAllSeries = os
-  .input(z.object({}))
-  .handler(
-    async () => await db.select().from(series).where(notDeleted(series))
-  );
-
-export const createSeries = os
+export const createSeries = authedProcedure
   .input(z.object({ title: z.string().min(1) }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const [created] = await db
       .insert(series)
-      .values({ title: input.title })
+      .values({ title: input.title, userId: context.userId })
       .returning();
     return created;
   });
 
-export const convertToSeries = os
+export const convertToSeries = authedProcedure
   .input(z.object({ recordingId: z.uuid() }))
-  .handler(async ({ input }) => {
+  .handler(async ({ input, context }) => {
     const [existingRecording] = await db
       .select({ prompt: recording.prompt, seriesId: recording.seriesId })
       .from(recording)
-      .where(and(eq(recording.id, input.recordingId), notDeleted(recording)))
+      .where(
+        and(
+          eq(recording.id, input.recordingId),
+          eq(recording.userId, context.userId),
+          notDeleted(recording)
+        )
+      )
       .limit(1);
 
     if (!existingRecording) {
@@ -50,7 +66,11 @@ export const convertToSeries = os
         .select()
         .from(series)
         .where(
-          and(eq(series.id, existingRecording.seriesId), notDeleted(series))
+          and(
+            eq(series.id, existingRecording.seriesId),
+            eq(series.userId, context.userId),
+            notDeleted(series)
+          )
         )
         .limit(1);
       return existingSeries;
@@ -58,7 +78,7 @@ export const convertToSeries = os
 
     const [created] = await db
       .insert(series)
-      .values({ title: existingRecording.prompt })
+      .values({ title: existingRecording.prompt, userId: context.userId })
       .returning();
 
     await db
