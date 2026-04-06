@@ -40,7 +40,7 @@ export const NewStoryDialog = ({
         <div className="flex flex-col gap-3">
           <Button
             variant="outline"
-            className="h-auto flex-col items-start gap-1 p-4 text-left w-full"
+            className="h-auto flex-col items-start gap-1 p-4 text-left whitespace-normal w-full"
             type="button"
             onClick={handleSingleClick}
           >
@@ -51,7 +51,7 @@ export const NewStoryDialog = ({
           </Button>
           <Button
             variant="outline"
-            className="h-auto flex-col items-start gap-1 p-4 text-left"
+            className="h-auto flex-col items-start gap-1 p-4 text-left whitespace-normal w-full"
             type="button"
             onClick={handleReinforceClick}
           >
