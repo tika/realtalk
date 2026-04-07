@@ -1,11 +1,11 @@
 import * as errorInstance from "./error-instance";
-import * as languageItem from "./language-item";
 import * as recording from "./recording";
-import * as series from "./series";
+import * as topic from "./topic";
+import * as user from "./user";
 
 export default {
   errorInstance,
-  languageItem,
   recording,
-  series,
+  topic,
+  user,
 };

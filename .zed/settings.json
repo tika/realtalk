@@ -49,6 +49,7 @@
       }
     },
     "TSX": {
+      "language_servers": ["!typescript-language-server", "vtsls"],
       "code_actions_on_format": {
         "source.fixAll.oxc": true,
         "source.organizeImports.oxc": true
@@ -64,6 +65,7 @@
         "source.fixAll.oxc": true,
         "source.organizeImports.oxc": true
       },
+      "language_servers": ["!typescript-language-server", "vtsls"],
       "formatter": {
         "language_server": {
           "name": "oxfmt"

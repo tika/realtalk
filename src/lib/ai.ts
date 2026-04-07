@@ -12,11 +12,13 @@ import { transcriptWordSchema } from "#/lib/transcript";
 import type { TranscriptWord } from "#/lib/transcript";
 import { transcriptAnalysisSchema } from "#/lib/transcript-analysis";
 
-import { sttPrompt, targetLang } from "./consts";
+import type { SupportedLanguage } from "./consts";
+import { sttPrompt } from "./consts";
+import { prompts } from "./prompts";
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const TRANSCRIPTION_MODEL = "whisper-1";
-const ANALYSIS_MODEL = "openai/gpt-5";
+const ANALYSIS_MODEL = "openai/gpt-4o-mini";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_KEY });
 const openrouter = new OpenAI({
@@ -25,11 +27,17 @@ const openrouter = new OpenAI({
 });
 
 export const transcribeAudioFromUrl = async (
-  audioUrl: string
+  audioUrl: string,
+  targetLanguage?: string
 ): Promise<Result<{ text: string; words: TranscriptWord[] }>> => {
   logInfo("transcription.start", { audioUrl, model: TRANSCRIPTION_MODEL });
 
   const fileResult = await fetchAudioFileFromUrl(audioUrl);
+
+  const prompt =
+    targetLanguage && targetLanguage in sttPrompt
+      ? sttPrompt[targetLanguage as SupportedLanguage]
+      : undefined;
 
   return await match(fileResult)
     .with({ success: false }, ({ error }) => {
@@ -47,7 +55,7 @@ export const transcribeAudioFromUrl = async (
           model: TRANSCRIPTION_MODEL,
           response_format: "verbose_json",
           timestamp_granularities: ["word"],
-          prompt: sttPrompt[targetLang],
+          prompt,
         });
 
         logInfo("transcription.success", {
@@ -75,6 +83,63 @@ export const transcribeAudioFromUrl = async (
       }
     })
     .exhaustive();
+};
+
+const practicePromptsSchema = z.object({
+  prompts: z.array(
+    z.object({
+      prompt: z.string(),
+      target_words: z.array(z.string()),
+    })
+  ),
+});
+
+export type PracticePrompt = z.infer<
+  typeof practicePromptsSchema
+>["prompts"][number];
+
+export const generatePracticePrompts = async (
+  words: string[],
+  targetLang: string,
+  nativeLang: string
+): Promise<Result<PracticePrompt[]>> => {
+  try {
+    logInfo("practice-prompts.start", {
+      model: ANALYSIS_MODEL,
+      wordCount: words.length,
+    });
+    const completion = await openrouter.chat.completions.parse({
+      model: ANALYSIS_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: prompts.generatePracticePrompts(
+            words,
+            targetLang,
+            nativeLang
+          ),
+        },
+      ],
+      response_format: zodResponseFormat(
+        practicePromptsSchema,
+        "practice_prompts"
+      ),
+    });
+    const parsed = completion.choices[0]?.message.parsed;
+
+    if (!parsed) {
+      logError("practice-prompts.empty-payload", { model: ANALYSIS_MODEL });
+      return err(new Error("AI returned no parsed payload"));
+    }
+
+    logInfo("practice-prompts.success", { count: parsed.prompts.length });
+    return ok(parsed.prompts);
+  } catch (error: unknown) {
+    logError("practice-prompts.error", { error, model: ANALYSIS_MODEL });
+    return err(
+      error instanceof Error ? error : new Error("Prompt generation failed")
+    );
+  }
 };
 
 export const analyzeTranscript = async (

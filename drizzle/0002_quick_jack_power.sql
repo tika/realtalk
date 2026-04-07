@@ -1,1 +1,0 @@
-ALTER TABLE "error_instance" ADD COLUMN "rating" integer DEFAULT 5 NOT NULL;

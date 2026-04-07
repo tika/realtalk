@@ -1,1 +1,0 @@
-ALTER TABLE "recording" RENAME COLUMN "audio_url" TO "audio_key";

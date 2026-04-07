@@ -1,9 +1,9 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { match } from "ts-pattern";
 import * as z from "zod";
 
 import { db } from "#/db";
-import { errorInstance, languageItem, recording } from "#/db/schema";
+import { errorInstance, recording, topic, user } from "#/db/schema";
 import { notDeleted } from "#/db/soft-delete";
 import { analyzeTranscript, transcribeAudioFromUrl } from "#/lib/ai";
 import { logError, logInfo } from "#/lib/observability";
@@ -24,8 +24,10 @@ interface ResolvedTranscriptAnalysisError extends TranscriptAnalysisError {
 
 interface RecordingAnalysisPayload {
   errors: ResolvedTranscriptAnalysisError[];
-  transcript: string;
+  missedTargetWords: string[];
+  summary: string;
   timestamps: z.infer<typeof transcriptWordSchema>[];
+  transcript: string;
 }
 
 const resolveAudioUrl = async (audioKey: string): Promise<string> => {
@@ -39,14 +41,24 @@ const resolveAudioUrl = async (audioKey: string): Promise<string> => {
     .exhaustive();
 };
 
+interface AnalysisContext {
+  nativeLanguage: string;
+  targetLanguage: string;
+  targetWords?: string[];
+}
+
 const getRecordingAnalysisPayload = async (
-  audioKey: string
+  audioKey: string,
+  analysisContext: AnalysisContext
 ): Promise<RecordingAnalysisPayload> => {
   logInfo("recording-analysis.start", {
     audioKey,
   });
   const audioUrl = await resolveAudioUrl(audioKey);
-  const transcriptionResult = await transcribeAudioFromUrl(audioUrl);
+  const transcriptionResult = await transcribeAudioFromUrl(
+    audioUrl,
+    analysisContext.targetLanguage
+  );
   const transcription = match(transcriptionResult)
     .with({ success: true }, ({ data }) => data)
     .with({ success: false }, ({ error }) => {
@@ -67,7 +79,12 @@ const getRecordingAnalysisPayload = async (
     wordCount: timestamps.length,
   });
   const transcriptAnalysisResult = await analyzeTranscript(
-    prompts.findErrors(`Transcript: "${numberedTranscript}"`)
+    prompts.findErrors(
+      numberedTranscript,
+      analysisContext.targetLanguage,
+      analysisContext.nativeLanguage,
+      analysisContext.targetWords
+    )
   );
   const transcriptAnalysis = match(transcriptAnalysisResult)
     .with({ success: true }, ({ data }) => data)
@@ -100,29 +117,23 @@ const getRecordingAnalysisPayload = async (
 
   return {
     errors: resolvedErrors,
-    transcript,
+    missedTargetWords: transcriptAnalysis.missed_target_words,
+    summary: transcriptAnalysis.summary,
     timestamps,
+    transcript,
   };
 };
 
 const replaceRecordingAnalysis = async (
   recordingId: string,
-  analysis: RecordingAnalysisPayload,
-  userId: string
+  analysis: RecordingAnalysisPayload
 ) => {
   const existingRecordingErrors = await db
-    .select({
-      id: errorInstance.id,
-      languageItemId: errorInstance.languageItemId,
-    })
+    .select({ id: errorInstance.id })
     .from(errorInstance)
     .where(
-      and(eq(errorInstance.storyId, recordingId), notDeleted(errorInstance))
+      and(eq(errorInstance.recordingId, recordingId), notDeleted(errorInstance))
     );
-
-  const languageItemIds = existingRecordingErrors.flatMap(
-    ({ languageItemId }) => (languageItemId ? [languageItemId] : [])
-  );
 
   return await db.transaction(async (tx) => {
     if (existingRecordingErrors.length > 0) {
@@ -134,32 +145,11 @@ const replaceRecordingAnalysis = async (
       );
     }
 
-    if (languageItemIds.length > 0) {
-      const activeReferences = await tx
-        .selectDistinct({ languageItemId: errorInstance.languageItemId })
-        .from(errorInstance)
-        .where(inArray(errorInstance.languageItemId, languageItemIds));
-
-      const activeLanguageItemIds = new Set(
-        activeReferences.flatMap(({ languageItemId }) =>
-          languageItemId ? [languageItemId] : []
-        )
-      );
-
-      const orphanedLanguageItemIds = languageItemIds.filter(
-        (languageItemId) => !activeLanguageItemIds.has(languageItemId)
-      );
-
-      if (orphanedLanguageItemIds.length > 0) {
-        await tx
-          .delete(languageItem)
-          .where(inArray(languageItem.id, orphanedLanguageItemIds));
-      }
-    }
-
     const [updatedRecording] = await tx
       .update(recording)
       .set({
+        missedTargetWords: analysis.missedTargetWords,
+        summary: analysis.summary,
         timestamps: analysis.timestamps,
         transcript: analysis.transcript,
         updatedAt: new Date(),
@@ -172,27 +162,15 @@ const replaceRecordingAnalysis = async (
     }
 
     for (const analysisError of analysis.errors) {
-      const [createdLanguageItem] = await tx
-        .insert(languageItem)
-        .values({
-          nativeText: analysisError.language_item.native_text,
-          purpose: analysisError.language_item.purpose,
-          targetText: analysisError.language_item.target_text,
-          type: analysisError.language_item.type,
-          userId,
-        })
-        .returning();
-
       await tx.insert(errorInstance).values({
         context: analysisError.context,
-        corrected_text: analysisError.corrected_text,
+        correctedText: analysisError.corrected_text,
         endTimeMs: analysisError.endTimeMs,
         errorType: analysisError.type,
-        languageItemId: createdLanguageItem.id,
-        rating: analysisError.rating,
-        original_text: analysisError.original_text,
+        originalText: analysisError.original_text,
+        recordingId,
+        severity: analysisError.severity,
         startTimeMs: analysisError.startTimeMs,
-        storyId: recordingId,
       });
     }
 
@@ -200,9 +178,6 @@ const replaceRecordingAnalysis = async (
   });
 };
 
-// return a list of all recordings
-// input: nothing
-// output: array of recording objects straight from db
 const withResolvedAudioUrl = async <T extends { audioKey: string }>(
   record: T
 ): Promise<T & { audioUrl: string }> => {
@@ -213,26 +188,45 @@ const withResolvedAudioUrl = async <T extends { audioKey: string }>(
 export const getAllRecordings = authedProcedure
   .input(z.object({}))
   .handler(async ({ context }) => {
+    const userRecord = await db
+      .select()
+      .from(user)
+      .where(eq(user.clerkId, context.userId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!userRecord) {
+      throw new Error("User not found");
+    }
+
     const rows = await db
       .select()
       .from(recording)
-      .where(and(eq(recording.userId, context.userId), notDeleted(recording)));
+      .where(and(eq(recording.userId, userRecord.id), notDeleted(recording)));
     return await Promise.all(rows.map(withResolvedAudioUrl));
   });
 
-// return a single recording by id
-// input: recording id
-// output: recording object from db
 export const getRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input, context }) => {
+    const userRecord = await db
+      .select()
+      .from(user)
+      .where(eq(user.clerkId, context.userId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!userRecord) {
+      throw new Error("User not found");
+    }
+
     const row = await db
       .select()
       .from(recording)
       .where(
         and(
           eq(recording.id, input.id),
-          eq(recording.userId, context.userId),
+          eq(recording.userId, userRecord.id),
           notDeleted(recording)
         )
       )
@@ -246,66 +240,105 @@ export const getRecording = authedProcedure
     return await withResolvedAudioUrl(row);
   });
 
-// create a new recording after you've recorded
-// input: audio blob url, selected prompt
-// output: recording object from db -> doesn't really matter
-// processing: create recording object, then start transcription using whisper-1, then update recording object
-// processing: analysing a recording - run through the transcript, find the linguistic errors and create records in the db
-// ** hesitations come from looking at the timestamps and finding gaps greater than a threshold
-// ** Claude Sonnet will:
-//    -  look through the transcript and flag native-language text, convert this to the target language (as "blank" error)
-//    -  look for grammatical and lexical mistakes, create corrections
 export const createRecording = authedProcedure
   .input(
     z.object({
       audioKey: z.string().min(1),
       prompt: z.string().min(1),
-      seriesId: z.uuid().optional(),
+      targetWords: z.string().array().optional(),
+      topicId: z.uuid(),
     })
   )
   .handler(async ({ input, context }) => {
+    const userRecord = await db
+      .select()
+      .from(user)
+      .where(eq(user.clerkId, context.userId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!userRecord) {
+      throw new Error("User not found");
+    }
+
+    const topicRecord = await db
+      .select()
+      .from(topic)
+      .where(
+        and(
+          eq(topic.id, input.topicId),
+          eq(topic.userId, userRecord.id),
+          notDeleted(topic)
+        )
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!topicRecord) {
+      throw new Error("Topic not found");
+    }
+
+    const targetWords = input.targetWords ?? topicRecord.words;
+
     logInfo("recording.create.start", {
       audioKey: input.audioKey,
       prompt: input.prompt,
-      seriesId: input.seriesId,
+      topicId: input.topicId,
     });
+
     const [createdRecording] = await db
       .insert(recording)
       .values({
         audioKey: input.audioKey,
         prompt: input.prompt,
-        seriesId: input.seriesId,
-        userId: context.userId,
+        targetWords,
+        topicId: input.topicId,
+        userId: userRecord.id,
       })
       .returning();
-    const analysis = await getRecordingAnalysisPayload(input.audioKey);
+
+    const analysis = await getRecordingAnalysisPayload(input.audioKey, {
+      nativeLanguage: userRecord.nativeLanguage,
+      targetLanguage: userRecord.targetLanguage,
+      targetWords,
+    });
 
     logInfo("recording.create.analysis-ready", {
       errorCount: analysis.errors.length,
       recordingId: createdRecording.id,
     });
-    return await replaceRecordingAnalysis(
-      createdRecording.id,
-      analysis,
-      context.userId
-    );
+
+    return await replaceRecordingAnalysis(createdRecording.id, analysis);
   });
 
 export const reanalyseRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input, context }) => {
+    const userRecord = await db
+      .select()
+      .from(user)
+      .where(eq(user.clerkId, context.userId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!userRecord) {
+      throw new Error("User not found");
+    }
+
     logInfo("recording.reanalyse.start", {
       recordingId: input.id,
     });
+
     const [existingRecording] = await db
       .select({
         audioKey: recording.audioKey,
+        targetWords: recording.targetWords,
       })
       .from(recording)
       .where(
         and(
           eq(recording.id, input.id),
-          eq(recording.userId, context.userId),
+          eq(recording.userId, userRecord.id),
           notDeleted(recording)
         )
       )
@@ -316,41 +349,37 @@ export const reanalyseRecording = authedProcedure
     }
 
     const analysis = await getRecordingAnalysisPayload(
-      existingRecording.audioKey
+      existingRecording.audioKey,
+      {
+        nativeLanguage: userRecord.nativeLanguage,
+        targetLanguage: userRecord.targetLanguage,
+        targetWords: existingRecording.targetWords,
+      }
     );
 
     logInfo("recording.reanalyse.analysis-ready", {
       errorCount: analysis.errors.length,
       recordingId: input.id,
     });
-    return await replaceRecordingAnalysis(input.id, analysis, context.userId);
+
+    return await replaceRecordingAnalysis(input.id, analysis);
   });
 
-// delete a recording by id
-// input: recording id
-// output: success message
 export const deleteRecording = authedProcedure
   .input(z.object({ id: z.uuid() }))
   .handler(async ({ input, context }) => {
-    const deletedAt = new Date();
-    const recordingErrors = await db
-      .select({
-        languageItemId: errorInstance.languageItemId,
-      })
-      .from(errorInstance)
-      .innerJoin(recording, eq(errorInstance.storyId, recording.id))
-      .where(
-        and(
-          eq(errorInstance.storyId, input.id),
-          eq(recording.userId, context.userId),
-          notDeleted(errorInstance),
-          notDeleted(recording)
-        )
-      );
+    const userRecord = await db
+      .select()
+      .from(user)
+      .where(eq(user.clerkId, context.userId))
+      .limit(1)
+      .then((rows) => rows[0]);
 
-    const languageItemIds = recordingErrors.flatMap(({ languageItemId }) =>
-      languageItemId ? [languageItemId] : []
-    );
+    if (!userRecord) {
+      throw new Error("User not found");
+    }
+
+    const deletedAt = new Date();
 
     await db.transaction(async (tx) => {
       const [deletedRecording] = await tx
@@ -359,7 +388,7 @@ export const deleteRecording = authedProcedure
         .where(
           and(
             eq(recording.id, input.id),
-            eq(recording.userId, context.userId),
+            eq(recording.userId, userRecord.id),
             notDeleted(recording)
           )
         )
@@ -373,45 +402,11 @@ export const deleteRecording = authedProcedure
         .update(errorInstance)
         .set({ deletedAt, updatedAt: deletedAt })
         .where(
-          and(eq(errorInstance.storyId, input.id), notDeleted(errorInstance))
-        );
-
-      if (languageItemIds.length > 0) {
-        const activeReferences = await tx
-          .selectDistinct({ languageItemId: errorInstance.languageItemId })
-          .from(errorInstance)
-          .innerJoin(recording, eq(errorInstance.storyId, recording.id))
-          .where(
-            and(
-              inArray(errorInstance.languageItemId, languageItemIds),
-              notDeleted(errorInstance),
-              notDeleted(recording),
-              ne(errorInstance.storyId, input.id)
-            )
-          );
-
-        const activeLanguageItemIds = new Set(
-          activeReferences.flatMap(({ languageItemId }) =>
-            languageItemId ? [languageItemId] : []
+          and(
+            eq(errorInstance.recordingId, input.id),
+            notDeleted(errorInstance)
           )
         );
-
-        const orphanedLanguageItemIds = languageItemIds.filter(
-          (languageItemId) => !activeLanguageItemIds.has(languageItemId)
-        );
-
-        if (orphanedLanguageItemIds.length > 0) {
-          await tx
-            .update(languageItem)
-            .set({ deletedAt, updatedAt: deletedAt })
-            .where(
-              and(
-                inArray(languageItem.id, orphanedLanguageItemIds),
-                notDeleted(languageItem)
-              )
-            );
-        }
-      }
     });
 
     return { success: true };

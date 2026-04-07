@@ -1,17 +1,15 @@
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
 import * as z from "zod";
 
-import { NewStoryDialog } from "#/components/new-story-dialog";
 import { RecordStory } from "#/components/record-story";
 import { Button } from "#/components/ui/button";
 import { useNewStory } from "#/hooks/use-new-story";
-import { storyPrompts } from "#/lib/consts.ts";
-import { orpc } from "#/orpc/client";
+import type { PracticePrompt } from "#/lib/ai";
+import { client, orpc } from "#/orpc/client";
 
 const searchSchema = z.object({
-  mode: z.enum(["single", "reinforce"]).optional(),
-  seriesId: z.string().uuid().optional(),
+  topicId: z.string().uuid().optional(),
 });
 
 export const Route = createFileRoute("/story/new")({
@@ -22,79 +20,145 @@ export const Route = createFileRoute("/story/new")({
       throw redirect({ to: "/" });
     }
   },
-  loaderDeps: ({ search }) => ({ seriesId: search.seriesId }),
+  loaderDeps: ({ search }) => ({ topicId: search.topicId }),
   loader: async ({ context, deps }) => {
-    if (!deps.seriesId) {
-      return { series: null };
-    }
-    const series = await context.queryClient.fetchQuery(
-      orpc.series.getSeries.queryOptions({ input: { id: deps.seriesId } })
+    await context.queryClient.ensureQueryData(
+      orpc.topic.getAllTopics.queryOptions({ input: {} })
     );
-    return { series };
+
+    if (!deps.topicId) {
+      return { topic: null };
+    }
+
+    const topic = await context.queryClient.fetchQuery(
+      orpc.topic.getTopic.queryOptions({ input: { id: deps.topicId } })
+    );
+    return { topic };
   },
 });
 
-const getRandomPrompts = () => {
-  const shuffled = [...storyPrompts].toSorted(() => 0.5 - Math.random());
-  return shuffled.slice(0, 3);
-};
+function PromptSelection({
+  topicId,
+  onSelect,
+}: {
+  topicId: string;
+  onSelect: (prompt: string, targetWords: string[]) => void;
+}) {
+  const generatePrompts = useMutation({
+    mutationFn: () => client.topic.getPrompts({ topicId }),
+  });
 
-function NewStory() {
-  const { mode, seriesId } = Route.useSearch();
-  const { series } = Route.useLoaderData();
-
-  const {
-    state,
-    dialogOpen,
-    setDialogOpen,
-    handleModeSelected,
-    selectPrompt,
-    finishRecording,
-    reset,
-    openDialog,
-  } = useNewStory({ mode, seriesId, prompt: series?.title });
-  const [prompts] = useState(getRandomPrompts);
+  const prompts: PracticePrompt[] = generatePrompts.data ?? [];
 
   return (
-    <main>
-      <div>
-        {state.stage === "mode-selection" && (
-          <>
-            <h1>New story</h1>
-            <Button type="button" onClick={openDialog}>
-              Get started
+    <>
+      <h1 className="text-2xl font-bold">Choose a prompt</h1>
+
+      {!generatePrompts.data && (
+        <Button
+          type="button"
+          onClick={() => generatePrompts.mutate()}
+          disabled={generatePrompts.isPending}
+        >
+          {generatePrompts.isPending
+            ? "Generating prompts…"
+            : "Generate prompts"}
+        </Button>
+      )}
+
+      {generatePrompts.isError && (
+        <p className="text-destructive">{generatePrompts.error.message}</p>
+      )}
+
+      {prompts.length > 0 && (
+        <div className="space-y-2">
+          {prompts.map((p) => (
+            <Button
+              key={p.prompt}
+              variant="outline"
+              className="h-auto w-full text-left whitespace-normal p-4"
+              onClick={() => onSelect(p.prompt, p.target_words)}
+            >
+              <div>
+                <p>{p.prompt}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Words: {p.target_words.join(", ")}
+                </p>
+              </div>
             </Button>
-            <NewStoryDialog
-              open={dialogOpen}
-              onOpenChange={setDialogOpen}
-              onSelect={handleModeSelected}
-            />
-          </>
-        )}
-        {state.stage === "prompt-selection" && (
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function NewStory() {
+  const { topic: initialTopic } = Route.useLoaderData();
+
+  const { data: topics } = useSuspenseQuery(
+    orpc.topic.getAllTopics.queryOptions({ input: {} })
+  );
+
+  const { state, handleTopicSelected, selectPrompt, finishRecording, reset } =
+    useNewStory({
+      topicId: initialTopic?.id,
+      topicWords: initialTopic?.words,
+    });
+
+  return (
+    <main className="p-4">
+      <div className="space-y-4">
+        {state.stage === "topic-selection" && (
           <>
-            <h1 className="text-2xl">Start your story</h1>
-            <div className="flex gap-4">
-              {prompts.map((prompt) => (
-                <Button key={prompt} onClick={() => selectPrompt(prompt)}>
-                  {prompt}
-                </Button>
-              ))}
-            </div>
+            <h1 className="text-2xl font-bold">New Recording</h1>
+            <p>Select a topic to practice:</p>
+            {topics.length === 0 ? (
+              <p className="text-muted-foreground">
+                No topics found. Create a topic first to start recording.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {topics.map((t) => (
+                  <Button
+                    key={t.id}
+                    variant="outline"
+                    onClick={() => handleTopicSelected(t.id, t.words)}
+                  >
+                    {t.name} ({t.words.length} words)
+                  </Button>
+                ))}
+              </div>
+            )}
           </>
         )}
+
+        {state.stage === "prompt-selection" && (
+          <PromptSelection topicId={state.topicId} onSelect={selectPrompt} />
+        )}
+
         {state.stage === "recording-story" && (
           <>
-            <h1>Record your story</h1>
-            <h2>{state.prompt}</h2>
+            <h1 className="text-2xl font-bold">Record your story</h1>
+            <p className="text-lg">{state.prompt}</p>
+            <p className="text-sm text-muted-foreground">
+              Target words: {state.targetWords.join(", ")}
+            </p>
             <RecordStory onFinish={finishRecording} />
           </>
         )}
-        {state.stage === "uploading" && <h1>Uploading your recording...</h1>}
-        {state.stage === "analysing" && <h1>Analysing your story...</h1>}
+
+        {state.stage === "uploading" && (
+          <h1 className="text-2xl font-bold">Uploading your recording...</h1>
+        )}
+
+        {state.stage === "analysing" && (
+          <h1 className="text-2xl font-bold">Analysing your story...</h1>
+        )}
+
         {state.stage === "error" && (
           <>
-            <h1>Something went wrong</h1>
+            <h1 className="text-2xl font-bold">Something went wrong</h1>
             <p className="text-destructive">{state.message}</p>
             <Button onClick={reset} type="button">
               Try again

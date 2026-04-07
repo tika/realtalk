@@ -67,7 +67,7 @@ function StoryDetail() {
             <p>{formatRelative(story.createdAt, new Date())}</p>
           </div>
         </div>
-        <StoryActions storyId={story.id} seriesId={story.seriesId} />
+        <StoryActions storyId={story.id} />
       </div>
 
       {isReanalysing && <p className="font-medium">Re-analysing story...</p>}

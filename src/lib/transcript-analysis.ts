@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Structured contract for the Claude transcript-analysis response.
+ * Structured contract for the transcript-analysis response.
  *
  * Keeping this next to the transcript-analysis domain logic makes the route and
  * OpenRouter client easier to scan, and gives us one place to evolve the
@@ -12,19 +12,15 @@ export const transcriptAnalysisSchema = z.object({
     z.object({
       context: z.string(),
       corrected_text: z.string(),
-      rating: z.number(),
-      language_item: z.object({
-        native_text: z.string(),
-        purpose: z.string(),
-        target_text: z.string(),
-        type: z.enum(["vocab", "grammar_rule", "phrase"]),
-      }),
       original_text: z.string(),
-      type: z.enum(["blank", "mistake"]),
-      word_end: z.int().nonnegative(),
-      word_start: z.int().nonnegative(),
+      severity: z.number().int().min(1).max(10),
+      type: z.enum(["fallback", "mistake", "hesitation"]),
+      word_end: z.number().int().nonnegative(),
+      word_start: z.number().int().nonnegative(),
     })
   ),
+  missed_target_words: z.array(z.string()),
+  summary: z.string(),
 });
 
 export type TranscriptAnalysis = z.infer<typeof transcriptAnalysisSchema>;

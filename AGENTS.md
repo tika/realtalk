@@ -23,6 +23,7 @@ Write code that is **accessible, performant, type-safe, and maintainable**. Focu
 - Use const assertions (`as const`) for immutable values and literal types
 - Leverage TypeScript's type narrowing instead of type assertions
 - Use meaningful variable names instead of magic numbers - extract constants with descriptive names
+- **Never define domain types locally.** Do not use the `const X = [...] as const; type X = (typeof X)[number]` pattern inline. Domain value sets (e.g., languages, statuses, roles, categories) must be defined once in a shared location (schema, shared types file, or config) and imported everywhere. Local type definitions for domain concepts cause drift, duplication, and make refactoring dangerous at scale.
 
 ### Modern JavaScript/TypeScript
 

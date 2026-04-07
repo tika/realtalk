@@ -6,55 +6,77 @@ import { logError, logInfo } from "#/lib/observability";
 import { uploadAudio } from "#/lib/upload-audio";
 import { orpc } from "#/orpc/client";
 
-export type Mode = "single" | "reinforce";
-
 export type State =
-  | { stage: "mode-selection" }
-  | { stage: "prompt-selection"; mode: Mode }
-  | { stage: "recording-story"; mode: Mode; prompt: string; seriesId?: string }
-  | { stage: "uploading"; mode: Mode; prompt: string; seriesId?: string }
-  | { stage: "analysing"; mode: Mode; prompt: string; seriesId?: string }
+  | { stage: "topic-selection" }
+  | { stage: "prompt-selection"; topicId: string; topicWords: string[] }
+  | {
+      stage: "recording-story";
+      topicId: string;
+      prompt: string;
+      targetWords: string[];
+    }
+  | {
+      stage: "uploading";
+      topicId: string;
+      prompt: string;
+      targetWords: string[];
+    }
+  | {
+      stage: "analysing";
+      topicId: string;
+      prompt: string;
+      targetWords: string[];
+    }
   | {
       stage: "error";
-      mode: Mode;
+      topicId: string;
       prompt: string;
-      seriesId?: string;
+      targetWords: string[];
       message: string;
     };
 
 type Action =
-  | { type: "mode-selected"; mode: Mode }
-  | { type: "prompt-selected"; prompt: string }
+  | { type: "topic-selected"; topicId: string; topicWords: string[] }
+  | { type: "prompt-selected"; prompt: string; targetWords: string[] }
   | { type: "recording-finished" }
   | { type: "upload-complete" }
   | { type: "failed"; message: string }
   | { type: "reset" };
 
 export interface InitParams {
-  mode?: Mode;
-  seriesId?: string;
+  topicId?: string;
+  topicWords?: string[];
   prompt?: string;
+  targetWords?: string[];
 }
 
 export const getInitialState = (params: InitParams): State => {
-  if (params.seriesId && params.prompt) {
+  if (params.topicId && params.prompt && params.targetWords) {
     return {
       stage: "recording-story",
-      mode: "reinforce",
+      topicId: params.topicId,
       prompt: params.prompt,
-      seriesId: params.seriesId,
+      targetWords: params.targetWords,
     };
   }
-  if (params.mode) {
-    return { stage: "prompt-selection", mode: params.mode };
+  if (params.topicId && params.topicWords) {
+    return {
+      stage: "prompt-selection",
+      topicId: params.topicId,
+      topicWords: params.topicWords,
+    };
   }
-  return { stage: "mode-selection" };
+  return { stage: "topic-selection" };
 };
 
 const reducer = (state: State, action: Action): State => {
   switch (action.type) {
-    case "mode-selected": {
-      return { stage: "prompt-selection", mode: action.mode };
+    case "topic-selected": {
+      return {
+        stage: "prompt-selection",
+        topicId: action.topicId,
+        topicWords: action.topicWords,
+      };
     }
     case "prompt-selected": {
       if (state.stage !== "prompt-selection") {
@@ -62,8 +84,9 @@ const reducer = (state: State, action: Action): State => {
       }
       return {
         stage: "recording-story",
-        mode: state.mode,
+        topicId: state.topicId,
         prompt: action.prompt,
+        targetWords: action.targetWords,
       };
     }
     case "recording-finished": {
@@ -72,9 +95,9 @@ const reducer = (state: State, action: Action): State => {
       }
       return {
         stage: "uploading",
-        mode: state.mode,
+        topicId: state.topicId,
         prompt: state.prompt,
-        seriesId: state.seriesId,
+        targetWords: state.targetWords,
       };
     }
     case "upload-complete": {
@@ -83,9 +106,9 @@ const reducer = (state: State, action: Action): State => {
       }
       return {
         stage: "analysing",
-        mode: state.mode,
+        topicId: state.topicId,
         prompt: state.prompt,
-        seriesId: state.seriesId,
+        targetWords: state.targetWords,
       };
     }
     case "failed": {
@@ -94,14 +117,14 @@ const reducer = (state: State, action: Action): State => {
       }
       return {
         stage: "error",
-        mode: state.mode,
+        topicId: state.topicId,
         prompt: state.prompt,
-        seriesId: "seriesId" in state ? state.seriesId : undefined,
+        targetWords: state.targetWords,
         message: action.message,
       };
     }
     case "reset": {
-      return { stage: "mode-selection" };
+      return { stage: "topic-selection" };
     }
     default: {
       return state;
@@ -118,10 +141,6 @@ export function useNewStory(params: InitParams) {
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const createSeries = useMutation(
-    orpc.series.createSeries.mutationOptions({})
-  );
 
   const createRecording = useMutation(
     orpc.recording.createRecording.mutationOptions({
@@ -147,12 +166,12 @@ export function useNewStory(params: InitParams) {
     })
   );
 
-  const handleModeSelected = (mode: Mode) => {
-    dispatch({ type: "mode-selected", mode });
+  const handleTopicSelected = (topicId: string, topicWords: string[]) => {
+    dispatch({ type: "topic-selected", topicId, topicWords });
   };
 
-  const selectPrompt = (prompt: string) => {
-    dispatch({ type: "prompt-selected", prompt });
+  const selectPrompt = (prompt: string, targetWords: string[]) => {
+    dispatch({ type: "prompt-selected", prompt, targetWords });
   };
 
   const finishRecording = async (blob: Blob) => {
@@ -169,29 +188,12 @@ export function useNewStory(params: InitParams) {
       logInfo("upload.complete", { audioKey });
       dispatch({ type: "upload-complete" });
 
-      if (current.mode === "reinforce") {
-        const existingSeriesId =
-          "seriesId" in current ? current.seriesId : undefined;
-
-        if (existingSeriesId) {
-          createRecording.mutate({
-            audioKey,
-            prompt: current.prompt,
-            seriesId: existingSeriesId,
-          });
-        } else {
-          const newSeries = await createSeries.mutateAsync({
-            title: current.prompt,
-          });
-          createRecording.mutate({
-            audioKey,
-            prompt: current.prompt,
-            seriesId: newSeries.id,
-          });
-        }
-      } else {
-        createRecording.mutate({ audioKey, prompt: current.prompt });
-      }
+      createRecording.mutate({
+        audioKey,
+        prompt: current.prompt,
+        topicId: current.topicId,
+        targetWords: current.targetWords,
+      });
     } catch (error: unknown) {
       logError("upload.error", { error });
       dispatch({
@@ -208,7 +210,7 @@ export function useNewStory(params: InitParams) {
     state,
     dialogOpen,
     setDialogOpen,
-    handleModeSelected,
+    handleTopicSelected,
     selectPrompt,
     finishRecording,
     reset,
