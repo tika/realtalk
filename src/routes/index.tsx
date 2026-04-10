@@ -5,6 +5,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { formatRelative } from "date-fns";
 import { useState } from "react";
 
 import { OnboardingDialog } from "#/components/onboarding-dialog";
@@ -16,11 +17,13 @@ import {
   DialogTitle,
 } from "#/components/ui/dialog";
 import { Input } from "#/components/ui/input";
+import type { SupportedLanguage } from "#/lib/consts";
+import { languageFlag } from "#/lib/consts";
 import { client, orpc } from "#/orpc/client";
 
 const Landing = () => (
   <main>
-    <h1 className="text-2xl font-bold">Realtalk</h1>
+    <h2 className="text-2xl font-bold">Welcome to Realtalk</h2>
     <p className="mt-2">
       Practice speaking and get feedback on your language skills.
     </p>
@@ -54,7 +57,9 @@ const EditWordsDialog = ({
 
   const addWord = () => {
     const word = wordInput.trim();
-    if (!word) {return;}
+    if (!word) {
+      return;
+    }
     editTopic.mutate([...topic.words, word]);
     setWordInput("");
   };
@@ -111,23 +116,22 @@ const EditWordsDialog = ({
   );
 };
 
-const Dashboard = () => {
-  const [newTopicName, setNewTopicName] = useState("");
-  const [editingTopic, setEditingTopic] = useState<{
-    id: string;
-    name: string;
-    words: string[];
-  } | null>(null);
+const AddTopicDialog = ({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+  const [name, setName] = useState("");
   const queryClient = useQueryClient();
 
-  const { data: topics } = useSuspenseQuery(
-    orpc.topic.getAllTopics.queryOptions({ input: {} })
-  );
-
   const createTopic = useMutation({
-    mutationFn: (name: string) => client.topic.createTopic({ name }),
+    mutationFn: (topicName: string) =>
+      client.topic.createTopic({ name: topicName }),
     onSuccess: () => {
-      setNewTopicName("");
+      setName("");
+      onOpenChange(false);
       queryClient.invalidateQueries({
         queryKey: orpc.topic.getAllTopics.queryOptions({ input: {} }).queryKey,
       });
@@ -135,37 +139,108 @@ const Dashboard = () => {
   });
 
   return (
-    <main>
-      <h1 className="font-bold">Realtalk</h1>
-
-      <div className="mt-6">
-        <h2 className="text-lg font-medium">Topics</h2>
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New topic</DialogTitle>
+        </DialogHeader>
         <form
-          className="flex gap-2 mt-3"
+          className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (newTopicName.trim()) {
-              createTopic.mutate(newTopicName.trim());
+            if (name.trim()) {
+              createTopic.mutate(name.trim());
             }
           }}
         >
           <Input
-            placeholder="New topic name"
-            value={newTopicName}
-            onChange={(e) => setNewTopicName(e.target.value)}
+            placeholder="Topic name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
           <Button
             type="submit"
-            disabled={!newTopicName.trim() || createTopic.isPending}
+            disabled={!name.trim() || createTopic.isPending}
           >
-            {createTopic.isPending ? "Creating…" : "Add"}
+            {createTopic.isPending ? "Creating…" : "Create"}
           </Button>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const RecentStories = () => {
+  const { data: recordings } = useSuspenseQuery(
+    orpc.recording.getAllRecordings.queryOptions({ input: {} })
+  );
+
+  const recent = recordings
+    .toSorted(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    .slice(0, 3);
+
+  if (recent.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      {recent.map((story) => (
+        <Link
+          key={story.id}
+          to="/story/$storyId"
+          params={{ storyId: story.id }}
+          className="rounded-2xl border border-border p-4 hover:bg-secondary/50 transition-colors"
+        >
+          <p className="font-medium truncate">{story.prompt}</p>
+          {story.summary && (
+            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+              {story.summary}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            {formatRelative(story.createdAt, new Date())}
+          </p>
+        </Link>
+      ))}
+    </div>
+  );
+};
+
+const Dashboard = ({ targetLanguage }: { targetLanguage: string }) => {
+  const [editingTopic, setEditingTopic] = useState<{
+    id: string;
+    name: string;
+    words: string[];
+  } | null>(null);
+  const [addTopicOpen, setAddTopicOpen] = useState(false);
+
+  const { data: topics } = useSuspenseQuery(
+    orpc.topic.getAllTopics.queryOptions({ input: {} })
+  );
+
+  const flag = languageFlag[targetLanguage as SupportedLanguage] ?? "🌍";
+
+  return (
+    <main>
+      <p className="text-3xl mb-8">{flag}</p>
+
+      <RecentStories />
+
+      <section className="mt-10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Topics</h2>
+          <Button variant="outline" onClick={() => setAddTopicOpen(true)}>
+            Add topic
+          </Button>
+        </div>
 
         {topics.length === 0 ? (
           <p className="mt-4 text-muted-foreground">
-            No topics yet. Create one above to start practicing.
+            No topics yet. Create one to start practicing.
           </p>
         ) : (
           <div className="flex flex-col gap-2 mt-4">
@@ -174,24 +249,37 @@ const Dashboard = () => {
                 key={topic.id}
                 className="flex items-center justify-between rounded-2xl border border-border p-4"
               >
-                <button
-                  type="button"
-                  className="text-left"
-                  onClick={() => setEditingTopic(topic)}
-                >
-                  <p className="font-medium">{topic.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {topic.words.length} words
+                <div>
+                  <p className="font-medium">
+                    <span className="text-muted-foreground">
+                      {topic.words.length}w
+                    </span>{" "}
+                    {topic.name}
                   </p>
-                </button>
-                <Link to="/story/new" search={{ topicId: topic.id }}>
-                  <Button variant="outline">New story</Button>
-                </Link>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setEditingTopic(topic)}
+                  >
+                    Edit
+                  </Button>
+                  <Link to="/story/new" search={{ topicId: topic.id }}>
+                    <Button>Record</Button>
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-medium">Stories</h2>
+        <StoriesList />
+      </section>
+
+      <AddTopicDialog open={addTopicOpen} onOpenChange={setAddTopicOpen} />
 
       {editingTopic && (
         <EditWordsDialog
@@ -200,6 +288,49 @@ const Dashboard = () => {
         />
       )}
     </main>
+  );
+};
+
+const StoriesList = () => {
+  const { data: recordings } = useSuspenseQuery(
+    orpc.recording.getAllRecordings.queryOptions({ input: {} })
+  );
+
+  const sorted = recordings.toSorted(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  if (sorted.length === 0) {
+    return (
+      <p className="mt-4 text-muted-foreground">
+        No stories yet. Record one to get started.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 mt-4">
+      {sorted.map((story) => (
+        <Link
+          key={story.id}
+          to="/story/$storyId"
+          params={{ storyId: story.id }}
+          className="flex items-center justify-between rounded-2xl border border-border p-4 hover:bg-secondary/50 transition-colors"
+        >
+          <div>
+            <p className="font-medium">{story.prompt}</p>
+            {story.summary && (
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                {story.summary}
+              </p>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground whitespace-nowrap ml-4">
+            {formatRelative(story.createdAt, new Date())}
+          </p>
+        </Link>
+      ))}
+    </div>
   );
 };
 
@@ -222,7 +353,7 @@ const AuthedApp = () => {
     );
   }
 
-  return <Dashboard />;
+  return <Dashboard targetLanguage={dbUser.targetLanguage} />;
 };
 
 const App = () => {
@@ -243,9 +374,14 @@ export const Route = createFileRoute("/")({
       orpc.user.getUser.queryOptions({ input: {} })
     );
     if (user) {
-      await context.queryClient.ensureQueryData(
-        orpc.topic.getAllTopics.queryOptions({ input: {} })
-      );
+      await Promise.all([
+        context.queryClient.ensureQueryData(
+          orpc.topic.getAllTopics.queryOptions({ input: {} })
+        ),
+        context.queryClient.ensureQueryData(
+          orpc.recording.getAllRecordings.queryOptions({ input: {} })
+        ),
+      ]);
     }
   },
 });

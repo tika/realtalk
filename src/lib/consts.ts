@@ -23,3 +23,10 @@ export const languageCode: Record<SupportedLanguage, string> = {
   russian: "ru",
   mandarin: "zh",
 };
+
+export const languageFlag: Record<SupportedLanguage, string> = {
+  english: "🇬🇧",
+  spanish: "🇪🇸",
+  russian: "🇷🇺",
+  mandarin: "🇨🇳",
+};

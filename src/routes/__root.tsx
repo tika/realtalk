@@ -33,13 +33,16 @@ const RootDocument = ({ children }: { children: React.ReactNode }) => (
     <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[var(--primary)] selection:text-primary-foreground mx-16 my-12">
       <TanStackQueryProvider>
         <ClerkProvider>
-          <header className="flex justify-end mb-4">
-            <Show when="signed-out">
-              <SignInButton mode="modal" />
-            </Show>
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
+          <header className="flex items-center justify-between mb-8">
+            <h1 className="text-xl font-bold">Realtalk</h1>
+            <div className="flex items-center gap-4">
+              <Show when="signed-out">
+                <SignInButton mode="modal" />
+              </Show>
+              <Show when="signed-in">
+                <UserButton />
+              </Show>
+            </div>
           </header>
           {children}
         </ClerkProvider>
